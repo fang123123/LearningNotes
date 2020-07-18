@@ -1,3 +1,7 @@
+# 目录
+
+[TOC]
+
 
 
 # 一、Spring Boot 入门
@@ -825,7 +829,7 @@ java -jar spring-boot-02-config-02-0.0.1-SNAPSHOT.jar --server.port=8087  --serv
 
 
 
-### 1、**自动配置原理：**
+### 1、自动配置原理
 
 1）、SpringBoot启动的时候加载主配置类，开启了自动配置功能 ==@EnableAutoConfiguration==
 
@@ -2792,9 +2796,9 @@ protected ModelAndView resolveErrorView(HttpServletRequest request, 	HttpServlet
 
 ![image-处理流程](D:\Dailylearning\J2EE\springboot\Springboot核心技术\笔记\Spring Boot笔记.assets\image-20200307190302888.png)
 
-### 2）、如果定制错误响应：
+### 2）、如果定制错误响应
 
-#### 	**1）、如何定制错误的页面；**
+#### 	1）、如何定制错误的页面
 
 ​			**1）、有模板引擎的情况下；error/状态码;** 【将错误页面命名为  错误状态码.html 放在模板引擎文件夹里面的 error文件夹下】，发生此状态码的错误就会来到  对应的页面；
 
@@ -4363,7 +4367,7 @@ started、running、failed
 
 启动流程：
 
-## **1、创建SpringApplication对象**
+## 1、创建SpringApplication对象
 
 ```java
 //应用程序入口
