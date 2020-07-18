@@ -1,0 +1,351 @@
+<html>
+<head>
+  <title>第三天：spring中aop和基于XML以及注解的AOP配置</title>
+  <basefont face="微软雅黑" size="2" />
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+  <meta name="exporter-version" content="YXBJ Windows/601535 (zh-CN, DDL); Windows/10.0.0 (Win64); EDAMVersion=V2;"/>
+  <meta name="content-class" content="yinxiang.markdown"/>
+  <style>
+    body, td {
+      font-family: 微软雅黑;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+<a name="896"/>
+<h1>第三天：spring中aop和基于XML以及注解的AOP配置</h1>
+
+<div><span><div style="font-size: 14px; margin: 0; padding: 0; width: 100%;"><h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">完善我们的account案例</h4>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;"><span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//增加一个转账操作</span>
+<span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">void</span> <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">transfer</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">(String sourceName, String targetName, Float money)</span> </span>{
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//1.根据名称查询转出账户</span>
+    Account sourceAccount = accountDao.findAccountByName(sourceName);
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//2.根据名称查出转入账户</span>
+    Account targetAccount = accountDao.findAccountByName(targetName);
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//3.转出账户减钱</span>
+    sourceAccount.setMoney(sourceAccount.getMoney() - money);
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//4.转入账户加钱</span>
+    targetAccount.setMoney(targetAccount.getMoney() + money);
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//5.更新转出账户</span>
+    accountDao.updateAccount(sourceAccount);
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//6.更新转入账户</span>
+    accountDao.updateAccount(targetAccount);
+}
+</code></pre>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">分析案例中的问题</h4>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">细节</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;">连接池：把消耗时间获取连接的部分放到应用加载的开始部分。<br/>
+在web工程时，启动tomcat加载应用时，创建一些连接，从而在后续项目应用时，不再跟数据库获取连接，保证使用connection时的执行效率<br/>
+在服务器中，有线程池，当tomcat启动时，会初始化许多线程放入线程池，之后的访问直接从线程池获取</p>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">问题</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：spring中aop和基于XML以及注解的AOP配置_files/Image.png" type="image/png" data-filename="Image.png"/></p>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">解决方法：创建一个事务管理器和一个连接管理器</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;">连接管理器：将连接和当前线程绑定<br/>
+事务管理器：从连接管理器获取连接，针对当前连接进行事务控制<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">注意：</strong><br/>
+连接关闭并不等于当前线程上没有连接，只不过是连接关闭，还回线程池<br/>
+正确方法是在关闭连接后，将线程和连接解绑</p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">回顾之前讲过的一个技术：动态代理</h4>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">代理模式的概念</h5>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">代理(Proxy)是一种设计模式,提供了间接对目标对象进行访问的方式;即通过代理对象访问目标对象.这样做的好处是:可以在目标对象实现的功能上,增加额外的功能补充,即扩展目标对象的功能.
+</code></pre>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">三种代理模式</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><code style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; color: #c1788b; padding: 4px 4px 2px 0; letter-spacing: -.3px;">静态代理、动态代理、Cglib代理</code><br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">静态代理方式</strong><br/>
+在使用静态代理时,被代理对象与代理对象需要一起实现相同的接口或者是继承相同父类，因此要定义一个接口或抽象类.</p>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">// 接口
+    interface IStar {
+        void sing();
+    }
+
+    // 真实对象
+    class LDHStar implements IStar {
+        @Override
+        public void sing() {
+            System.out.println(&quot;刘德华唱歌&quot;);
+        }
+
+    }
+
+    // 代理类需要有真实对象的控制权 (引用)
+    class ProxyManger implements IStar {
+        
+        // 真实对象的引用
+        private IStar star;
+        
+        public ProxyManger() {
+            super();
+        }
+
+        public ProxyManger(IStar star) {
+            super();
+            this.star = star;
+        }
+        
+        @Override
+        public void sing() {
+　　　　　　System.out.println(&quot;唱歌前准备&quot;);
+    　　　 star.sing();
+   　　　　System.out.println(&quot;善后工作&quot;);        }
+    }
+class Test{
+public static void main(String[] args) {
+            // 创建明星对象
+            IStar ldh = new LDHStar();
+            ProxyManger proxy = new ProxyManger(ldh);
+            proxy.sing();
+        }
+}
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">动态代理</strong><br/>
+基于接口的动态代理</p>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">涉及的类：Proxy
+提供者：JDK官方
+如何创建代理对象
+       使用Proxy类中的newProxyInstance方法
+创建代理对象的要求：
+       被代理类最少实现一个接口，如果没有则不能使用
+newProxyInstance方法的参数
+         ClassLoader：类加载器
+            它是用于加载代理对象字节码。和被代理对象使用相同的类加载器,固定写法
+         Class[]：字节码数组
+            它是用于让代理对象和被代理对象有相同方法。和被代理对象使用相同的接口，固定写法
+         InvocationHandler：用于提供增强的代码
+            它是让我们写如何代理。我们一般都是写一个该接口的实现类，通常情况下都是匿名内部类，但不是必须的
+         此接口的实现类都是谁用谁写。
+         
+ <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">final</span> Producer producer = <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">new</span> Producer();      
+ IProducer proxyProducer = (IProducer) Proxy.newProxyInstance(producer.getClass().getClassLoader(), producer.getClass().getInterfaces(), <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">new</span> InvocationHandler() {
+<span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+* 执行被代理对象的任何接口方法都会经过该方法
+* <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@param</span> proxy 代理对象的引用
+* <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@param</span> method 被代理对象方法
+* <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@param</span> args 被代理对象方法的参数
+* <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@return</span> 被代理对象方法的返回值
+* <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@throws</span> Throwable
+*/</span>
+<span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> Object <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">invoke</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">(Object proxy, Method method, Object[] args)</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">throws</span> Throwable </span>{
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//提供增强的代码</span>
+    Object returnValue = <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">null</span>;
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//1.获取方法执行的函数</span>
+    Float money = (Float)args[<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">0</span>];
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//2.判断当前方法是不是销售</span>
+    <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">if</span>(<span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;sellProduct&quot;</span>.equals(method.getName())){
+        <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//调用原先方法进行方法增强</span>
+        <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//producer是被代理对象</span>
+        returnValue = method.invoke(producer,money*<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">0.8f</span>);
+    }
+    <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">return</span> returnValue;
+}
+});
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Cglib代理</strong><br/>
+基于子类的动态代理</p>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">涉及的类：Enhancer
+提供者：第三方cglib库
+如何创建代理对象
+        使用Enhancer类中的create方法
+创建代理对象的要求：
+        被代理类不能使最终类
+create方法的参数
+         Class：字节码
+            它是用于指定被代理对象的字节码
+         Callback：用于提供增强的代码
+            它是让我们写如何代理。我们一般都是写一个该接口的实现类，通常情况下都是匿名内部类，但不是必须的
+            此接口的实现类都是谁用谁写。
+            一般写的都是该接口的子接口的实现类：MethodIntercepter
+<span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">final</span> Producer producer = <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">new</span> Producer();
+Producer cglibProducer = (Producer) Enhancer.create(Producer.class, <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">new</span> MethodInterceptor() {
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+     * 执行被代理对象的任何方法都会经过该方法
+     * <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@param</span> o 代理对象的引用
+     * <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@param</span> method 代理对象当前执行方法的方法
+     * <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@param</span> args 代理对象当前执行方法的参数
+     *  以上三个参数和基于接口的动态代理中invoke方法的参数一样
+     * <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@param</span> methodProxy 当前执行方法的代理对象
+     * <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@return</span> 和被代理对象方法有相同的返回值
+     * <span style="color: #608b4e; line-height: 160%; box-sizing: content-box;">@throws</span> Throwable
+     */</span>
+    <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> Object <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">intercept</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">(Object o, Method method, Object[] args, MethodProxy methodProxy)</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">throws</span> Throwable </span>{
+        <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//提供增强的代码</span>
+        Object returnValue = <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">null</span>;
+        <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//1.获取方法执行的函数</span>
+        Float money = (Float)args[<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">0</span>];
+        <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//2.判断当前方法是不是销售</span>
+        <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">if</span>(<span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;sellProduct&quot;</span>.equals(method.getName())){
+            <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//调用原先方法进行方法增强</span>
+            <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//producer是被代理对象</span>
+            returnValue = method.invoke(producer,money*<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">0.8f</span>);
+        }
+        <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">return</span> returnValue;
+    }
+});
+cglibProducer.sellProduct(<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">12000f</span>);
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">三个代理模式比较</strong><br/>
+静态代理和动态代理都是基于接口的代理模式；Cglib是基于类的代理模式<br/>
+静态代理与动态代理差别：静态代理要针对每个被代理对象编写实现类，如果被代理对象较多，则要实现很多代理类，烦琐。<br/>
+动态代理与Cglib代理的差别：动态代理需要被代理类有一个抽象接口，Cglib代理需要被代理类不是最终类</p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">AOP的概念</h4>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Aspect Oriented Programming：面向切面编程</strong><br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">定义</strong>：通过预编译方式和运行器动态代理实现程序功能的统一维护的一种技术。AOP是OOP(Object Oriented Programming)的延续，也是Spring框架的一个重要内容，是函数式编程的一种衍生泛型。<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">作用</strong>：把程序的重复部分抽取出来，在需要执行的时候，使用动态代理技术，在不修改源码的基础上，对方法进行增强<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">优势</strong>：减少重复代码、提高开发效率、维护方便<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">举例</strong>：业务层调用持久层方法（原子操作），然后将这些方法包装实现功能，为了满足功能的一致性，需要让每个功能都是一个事务，因此对于每个功能都需要添加事务操作，这部分就属于重复部分，可以使用动态代理技术直接对持久层方法进行增强。<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">实现方式</strong>：动态代理</p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">spring中AOP相关术语</h4>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">JoinPoint（连接点）</strong>：指被拦截到的点。在spring中指被代理对象的方法，因为spring只支持方法类型的连接点。<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Pointcut（切入点）</strong>：对与要拦截的JoinPoint的定义，就是需要增强的方法<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Advice（通知/增强）</strong>：拦截到JoinPoint后的处理。<br/>
+通知的类型：前置通知、后置通知、异常通知、最终通知、环绕通知（整个invoke方法）<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Introduction（引介）</strong>：一种特殊的通知，在不修改类代码的前提下，Introduction可以在运行期为类动态添加一些方法或Field。<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Target（目标对象）</strong>：被代理对象<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Weabing（织入）</strong>：把增强应用到目标对象来创建新的代理对象的过程<br/>
+spring采用的是动态代理织入，而AspectJ采用的是编译器织入和类装载期织入<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Proxy（代理）</strong> ：一个类被AOP织入增强后，就产生了一个结果代理类，即代理对象<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">Aspect（切面）</strong>：切入点和通知的结合，个人应该就是重写的那段代码</p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">spring的AOP使用</h4>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：spring中aop和基于XML以及注解的AOP配置_files/Image [1].png" type="image/png" data-filename="Image.png"/></p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">spring中基于XML和注解的AOP配置</h4>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">基于XML的AOP配置</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">AOP配置步骤</strong></p>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">spring中基于xml的AOP配置步骤：
+<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">1</span>、把通知bean交给spring来管理
+<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">2</span>、使用aop:config标签表明开始AOP的配置
+<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">3</span>、使用aop:aspect标签表明配置切面
+    属性 ：
+        id：给切面提供一个唯一标识
+        ref：执行通知类bean的id标识
+<span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;">4</span>、在aop:aspect标签的内部使用对应标签来配置通知的类型
+    标签：
+        aop:before：表示配置前置通知
+            属性：
+                method：指定通知类中哪一个方法是前置通知
+                pointcut：指定切入点表达式，该表达式含义是指对业务层中哪些方法增强
+切入点表达式的写法：
+    关键字：execution（表达式）
+    表达式：
+        访问修饰符、返回值、参数列表
+    举例：
+        <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">void</span> com.itheima.service.impl.AccountServiceImpl.saveAccount()
+    访问修饰符可以省略
+    返回值可以使用通配符，表示返回任意值
+    包名可以使用通配符，表示任意包。但是每一个层级都需要写一个*
+    包名可以使用..表示当前包及其子包
+    类名和方法名都可以使用*实现通配
+    参数列表：
+        可以直接写数据类型：
+            基本类名直接写名称的方法    <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">int</span>
+            引用类型写包名.类名的方法   java.lang.String
+        可以使用通配符表示任意类型，但是必须有参数
+        可以使用..表示有无参数均可，有参数可以使任意类型
+    全通配写法：
+        * *..*.*(..)
+    实际开发中切入点表达式的通常写法：
+        切到业务层实现类下的所有方法：
+            * com.itheim.service.impl.*.*(..)
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">细节描述</strong>:切入点表达式的解析是由aspectj（jar）实现的<br/>
+<img src="第三天：spring中aop和基于XML以及注解的AOP配置_files/Image [2].png" type="image/png" data-filename="Image.png"/><br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">XML的AOP配置说明</strong><br/>
+<img src="第三天：spring中aop和基于XML以及注解的AOP配置_files/Image [3].png" type="image/png" data-filename="Image.png"/><br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">四种通知（前置、后置、异常、最终）的XML配置</strong><br/>
+<img src="第三天：spring中aop和基于XML以及注解的AOP配置_files/Image [4].png" type="image/png" data-filename="Image.png"/><br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">环绕通知的配置</strong><br/>
+XML配置和前面4种一样<br/>
+<img src="第三天：spring中aop和基于XML以及注解的AOP配置_files/Image [5].png" type="image/png" data-filename="Image.png"/><br/>
+增强方法的配置</p>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;"><span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+ * 环绕通知
+ * 问题：
+ *      当配置环绕通知后，切入点方法没执行，环绕通知执行了
+ * 分析：
+ *      通过对比动态代理中的环绕通知代码，动态代理中环绕通知有明确的切入点方法调用
+ * 解决：
+ *      spring框架为我们提供一个接口：ProceedingJoinPoint。该接口有一个方法proceed()，此方法就相当于明确调用切入点方法。
+ *      该接口可以作为环绕通知的方法参数，在程序执行时，spring框架会为我们提供该接口的实现类供我们使用
+ * spring中的环绕通知：
+ *      它是spring框架为我们提供的一种可以在代码中手动控制增强方法何时执行的方式
+ */</span>
+<span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> Object <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">aroundPrintLog</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">(ProceedingJoinPoint proceedingJoinPoint)</span></span>{
+    Object rtValue = <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">null</span>;
+    <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">try</span> {
+        Object[] args = proceedingJoinPoint.getArgs();
+        rtValue = proceedingJoinPoint.proceed(args);
+        <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">return</span> rtValue;
+    } <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">catch</span> (Throwable throwable) {
+        <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">throw</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">new</span> RuntimeException(throwable);
+    }<span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">finally</span> {
+    }
+}
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">注意</strong>：spring注解配置的前四种通知执行的顺序存在问题，所以建议使用环绕通知配置</p>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">基于注解的AOP配置</h5>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;"><span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@Component</span>(value = <span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;logger&quot;</span>)
+<span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@Aspect</span><span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">//表示当前类是一个切面类</span>
+<span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> <span style="color: #b8d7a3; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">class</span> <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">Logger</span> </span>{
+    <span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@Pointcut</span>(value = <span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;execution(public void com.itheima.service.impl.AccountServiceImpl.saveAccount())&quot;</span>)
+    <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">private</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">void</span> <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">pt1</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">()</span></span>{}
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+     * 前置通知
+     */</span>
+    <span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@Before</span>(value = <span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;pt1()&quot;</span>)
+    <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">void</span> <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">beforePrintLog</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">()</span></span>{
+        System.out.println(<span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;前置通知Logger类中的beforePrintLog方法开始记录日志&quot;</span>);
+    }
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+     * 后置通知
+     */</span>
+    <span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@AfterReturning</span>(value = <span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;pt1()&quot;</span>)
+    <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">void</span> <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">afterReturningPrintLog</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">()</span></span>{
+        System.out.println(<span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;后置通知Logger类中的afterReturningPrintLog方法开始记录日志&quot;</span>);
+    }
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+     * 异常通知
+     */</span>
+    <span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@AfterThrowing</span>(value = <span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;pt1()&quot;</span>)
+    <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">void</span> <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">afterThrowingPrintLog</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">()</span></span>{
+        System.out.println(<span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;异常通知Logger类中的afterThrowingPrintLog方法开始记录日志&quot;</span>);
+    }
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+     * 最终通知
+     */</span>
+    <span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@AfterReturning</span>(value = <span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;pt1()&quot;</span>)
+    <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">void</span> <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">afterPrintLog</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">()</span></span>{
+        System.out.println(<span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;最终通知Logger类中的afterPrintLog方法开始记录日志&quot;</span>);
+    }
+    <span style="color: #57a64a; font-style: italic; line-height: 160%; box-sizing: content-box;">/**
+     * 环绕通知
+     * 问题：
+     *      当配置环绕通知后，切入点方法没执行，环绕通知执行了
+     * 分析：
+     *      通过对比动态代理中的环绕通知代码，动态代理中环绕通知有明确的切入点方法调用
+     * 解决：
+     *      spring框架为我们提供一个接口：ProceedingJoinPoint。该接口有一个方法proceed()，此方法就相当于明确调用切入点方法。
+     *      该接口可以作为环绕通知的方法参数，在程序执行时，spring框架会为我们提供该接口的实现类供我们使用
+     * spring中的环绕通知：
+     *      它是spring框架为我们提供的一种可以在代码中手动控制增强方法何时执行的方式
+     */</span>
+    <span style="color: #9b9b9b; line-height: 160%; box-sizing: content-box;">@Around</span>(value = <span style="color: #d69d85; line-height: 160%; box-sizing: content-box;">&quot;pt1()&quot;</span>)
+    <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;"><span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">public</span> Object <span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">aroundPrintLog</span><span style="color: #dcdcdc; line-height: 160%; box-sizing: content-box;">(ProceedingJoinPoint proceedingJoinPoint)</span></span>{
+        Object rtValue = <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">null</span>;
+        <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">try</span> {
+            Object[] args = proceedingJoinPoint.getArgs();
+            rtValue = proceedingJoinPoint.proceed(args);
+            <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">return</span> rtValue;
+        } <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">catch</span> (Throwable throwable) {
+            <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">throw</span> <span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">new</span> RuntimeException(throwable);
+        }<span style="color: #569cd6; line-height: 160%; box-sizing: content-box;">finally</span> {
+        }
+    }
+}
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">注意</strong><br/>
+使用注解方式实现AOP时，spring框架的执行顺序有问题<br/>
+此时执行顺序是：前置通知-&gt;最终通知-&gt;后置通知-&gt;异常通知<br/>
+因此：使用注解方式实现AOP时，应使用环绕通知实现</p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">使用纯注解方式配置打开AOP</h4>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：spring中aop和基于XML以及注解的AOP配置_files/Image [6].png" type="image/png" data-filename="Image.png"/></p>
+</div><center style="display:none !important;visibility:collapse !important;height:0 !important;white-space:nowrap;width:100%;overflow:hidden">%23%23%23%23%20%E5%AE%8C%E5%96%84%E6%88%91%E4%BB%AC%E7%9A%84account%E6%A1%88%E4%BE%8B%0A%60%60%60java%0A%2F%2F%E5%A2%9E%E5%8A%A0%E4%B8%80%E4%B8%AA%E8%BD%AC%E8%B4%A6%E6%93%8D%E4%BD%9C%0Apublic%20void%20transfer(String%20sourceName%2C%20String%20targetName%2C%20Float%20money)%20%7B%0A%20%20%20%20%2F%2F1.%E6%A0%B9%E6%8D%AE%E5%90%8D%E7%A7%B0%E6%9F%A5%E8%AF%A2%E8%BD%AC%E5%87%BA%E8%B4%A6%E6%88%B7%0A%20%20%20%20Account%20sourceAccount%20%3D%20accountDao.findAccountByName(sourceName)%3B%0A%20%20%20%20%2F%2F2.%E6%A0%B9%E6%8D%AE%E5%90%8D%E7%A7%B0%E6%9F%A5%E5%87%BA%E8%BD%AC%E5%85%A5%E8%B4%A6%E6%88%B7%0A%20%20%20%20Account%20targetAccount%20%3D%20accountDao.findAccountByName(targetName)%3B%0A%20%20%20%20%2F%2F3.%E8%BD%AC%E5%87%BA%E8%B4%A6%E6%88%B7%E5%87%8F%E9%92%B1%0A%20%20%20%20sourceAccount.setMoney(sourceAccount.getMoney()%20-%20money)%3B%0A%20%20%20%20%2F%2F4.%E8%BD%AC%E5%85%A5%E8%B4%A6%E6%88%B7%E5%8A%A0%E9%92%B1%0A%20%20%20%20targetAccount.setMoney(targetAccount.getMoney()%20%2B%20money)%3B%0A%20%20%20%20%2F%2F5.%E6%9B%B4%E6%96%B0%E8%BD%AC%E5%87%BA%E8%B4%A6%E6%88%B7%0A%20%20%20%20accountDao.updateAccount(sourceAccount)%3B%0A%20%20%20%20%2F%2F6.%E6%9B%B4%E6%96%B0%E8%BD%AC%E5%85%A5%E8%B4%A6%E6%88%B7%0A%20%20%20%20accountDao.updateAccount(targetAccount)%3B%0A%7D%0A%60%60%60%0A%23%23%23%23%20%E5%88%86%E6%9E%90%E6%A1%88%E4%BE%8B%E4%B8%AD%E7%9A%84%E9%97%AE%E9%A2%98%0A%23%23%23%23%23%20%E7%BB%86%E8%8A%82%0A%E8%BF%9E%E6%8E%A5%E6%B1%A0%EF%BC%9A%E6%8A%8A%E6%B6%88%E8%80%97%E6%97%B6%E9%97%B4%E8%8E%B7%E5%8F%96%E8%BF%9E%E6%8E%A5%E7%9A%84%E9%83%A8%E5%88%86%E6%94%BE%E5%88%B0%E5%BA%94%E7%94%A8%E5%8A%A0%E8%BD%BD%E7%9A%84%E5%BC%80%E5%A7%8B%E9%83%A8%E5%88%86%E3%80%82%0A%E5%9C%A8web%E5%B7%A5%E7%A8%8B%E6%97%B6%EF%BC%8C%E5%90%AF%E5%8A%A8tomcat%E5%8A%A0%E8%BD%BD%E5%BA%94%E7%94%A8%E6%97%B6%EF%BC%8C%E5%88%9B%E5%BB%BA%E4%B8%80%E4%BA%9B%E8%BF%9E%E6%8E%A5%EF%BC%8C%E4%BB%8E%E8%80%8C%E5%9C%A8%E5%90%8E%E7%BB%AD%E9%A1%B9%E7%9B%AE%E5%BA%94%E7%94%A8%E6%97%B6%EF%BC%8C%E4%B8%8D%E5%86%8D%E8%B7%9F%E6%95%B0%E6%8D%AE%E5%BA%93%E8%8E%B7%E5%8F%96%E8%BF%9E%E6%8E%A5%EF%BC%8C%E4%BF%9D%E8%AF%81%E4%BD%BF%E7%94%A8connection%E6%97%B6%E7%9A%84%E6%89%A7%E8%A1%8C%E6%95%88%E7%8E%87%0A%E5%9C%A8%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%AD%EF%BC%8C%E6%9C%89%E7%BA%BF%E7%A8%8B%E6%B1%A0%EF%BC%8C%E5%BD%93tomcat%E5%90%AF%E5%8A%A8%E6%97%B6%EF%BC%8C%E4%BC%9A%E5%88%9D%E5%A7%8B%E5%8C%96%E8%AE%B8%E5%A4%9A%E7%BA%BF%E7%A8%8B%E6%94%BE%E5%85%A5%E7%BA%BF%E7%A8%8B%E6%B1%A0%EF%BC%8C%E4%B9%8B%E5%90%8E%E7%9A%84%E8%AE%BF%E9%97%AE%E7%9B%B4%E6%8E%A5%E4%BB%8E%E7%BA%BF%E7%A8%8B%E6%B1%A0%E8%8E%B7%E5%8F%96%0A%23%23%23%23%23%20%E9%97%AE%E9%A2%98%0A!%5B799d114ee9c928d02af037142df9983e.png%5D(en-resource%3A%2F%2Fdatabase%2F898%3A1)%0A%23%23%23%23%23%20%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95%EF%BC%9A%E5%88%9B%E5%BB%BA%E4%B8%80%E4%B8%AA%E4%BA%8B%E5%8A%A1%E7%AE%A1%E7%90%86%E5%99%A8%E5%92%8C%E4%B8%80%E4%B8%AA%E8%BF%9E%E6%8E%A5%E7%AE%A1%E7%90%86%E5%99%A8%0A%E8%BF%9E%E6%8E%A5%E7%AE%A1%E7%90%86%E5%99%A8%EF%BC%9A%E5%B0%86%E8%BF%9E%E6%8E%A5%E5%92%8C%E5%BD%93%E5%89%8D%E7%BA%BF%E7%A8%8B%E7%BB%91%E5%AE%9A%0A%E4%BA%8B%E5%8A%A1%E7%AE%A1%E7%90%86%E5%99%A8%EF%BC%9A%E4%BB%8E%E8%BF%9E%E6%8E%A5%E7%AE%A1%E7%90%86%E5%99%A8%E8%8E%B7%E5%8F%96%E8%BF%9E%E6%8E%A5%EF%BC%8C%E9%92%88%E5%AF%B9%E5%BD%93%E5%89%8D%E8%BF%9E%E6%8E%A5%E8%BF%9B%E8%A1%8C%E4%BA%8B%E5%8A%A1%E6%8E%A7%E5%88%B6%0A**%E6%B3%A8%E6%84%8F%EF%BC%9A**%0A%E8%BF%9E%E6%8E%A5%E5%85%B3%E9%97%AD%E5%B9%B6%E4%B8%8D%E7%AD%89%E4%BA%8E%E5%BD%93%E5%89%8D%E7%BA%BF%E7%A8%8B%E4%B8%8A%E6%B2%A1%E6%9C%89%E8%BF%9E%E6%8E%A5%EF%BC%8C%E5%8F%AA%E4%B8%8D%E8%BF%87%E6%98%AF%E8%BF%9E%E6%8E%A5%E5%85%B3%E9%97%AD%EF%BC%8C%E8%BF%98%E5%9B%9E%E7%BA%BF%E7%A8%8B%E6%B1%A0%0A%E6%AD%A3%E7%A1%AE%E6%96%B9%E6%B3%95%E6%98%AF%E5%9C%A8%E5%85%B3%E9%97%AD%E8%BF%9E%E6%8E%A5%E5%90%8E%EF%BC%8C%E5%B0%86%E7%BA%BF%E7%A8%8B%E5%92%8C%E8%BF%9E%E6%8E%A5%E8%A7%A3%E7%BB%91%0A%23%23%23%23%20%E5%9B%9E%E9%A1%BE%E4%B9%8B%E5%89%8D%E8%AE%B2%E8%BF%87%E7%9A%84%E4%B8%80%E4%B8%AA%E6%8A%80%E6%9C%AF%EF%BC%9A%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%0A%23%23%23%23%23%20%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F%E7%9A%84%E6%A6%82%E5%BF%B5%0A%60%60%60%0A%E4%BB%A3%E7%90%86(Proxy)%E6%98%AF%E4%B8%80%E7%A7%8D%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%2C%E6%8F%90%E4%BE%9B%E4%BA%86%E9%97%B4%E6%8E%A5%E5%AF%B9%E7%9B%AE%E6%A0%87%E5%AF%B9%E8%B1%A1%E8%BF%9B%E8%A1%8C%E8%AE%BF%E9%97%AE%E7%9A%84%E6%96%B9%E5%BC%8F%3B%E5%8D%B3%E9%80%9A%E8%BF%87%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E8%AE%BF%E9%97%AE%E7%9B%AE%E6%A0%87%E5%AF%B9%E8%B1%A1.%E8%BF%99%E6%A0%B7%E5%81%9A%E7%9A%84%E5%A5%BD%E5%A4%84%E6%98%AF%3A%E5%8F%AF%E4%BB%A5%E5%9C%A8%E7%9B%AE%E6%A0%87%E5%AF%B9%E8%B1%A1%E5%AE%9E%E7%8E%B0%E7%9A%84%E5%8A%9F%E8%83%BD%E4%B8%8A%2C%E5%A2%9E%E5%8A%A0%E9%A2%9D%E5%A4%96%E7%9A%84%E5%8A%9F%E8%83%BD%E8%A1%A5%E5%85%85%2C%E5%8D%B3%E6%89%A9%E5%B1%95%E7%9B%AE%E6%A0%87%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%8A%9F%E8%83%BD.%0A%60%60%60%0A%23%23%23%23%23%20%E4%B8%89%E7%A7%8D%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F%0A%60%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86%E3%80%81%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E3%80%81Cglib%E4%BB%A3%E7%90%86%60%0A**%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86%E6%96%B9%E5%BC%8F**%0A%E5%9C%A8%E4%BD%BF%E7%94%A8%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86%E6%97%B6%2C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E4%B8%8E%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E9%9C%80%E8%A6%81%E4%B8%80%E8%B5%B7%E5%AE%9E%E7%8E%B0%E7%9B%B8%E5%90%8C%E7%9A%84%E6%8E%A5%E5%8F%A3%E6%88%96%E8%80%85%E6%98%AF%E7%BB%A7%E6%89%BF%E7%9B%B8%E5%90%8C%E7%88%B6%E7%B1%BB%EF%BC%8C%E5%9B%A0%E6%AD%A4%E8%A6%81%E5%AE%9A%E4%B9%89%E4%B8%80%E4%B8%AA%E6%8E%A5%E5%8F%A3%E6%88%96%E6%8A%BD%E8%B1%A1%E7%B1%BB.%0A%60%60%60%0A%2F%2F%20%E6%8E%A5%E5%8F%A3%0A%20%20%20%20interface%20IStar%20%7B%0A%20%20%20%20%20%20%20%20void%20sing()%3B%0A%20%20%20%20%7D%0A%0A%20%20%20%20%2F%2F%20%E7%9C%9F%E5%AE%9E%E5%AF%B9%E8%B1%A1%0A%20%20%20%20class%20LDHStar%20implements%20IStar%20%7B%0A%20%20%20%20%20%20%20%20%40Override%0A%20%20%20%20%20%20%20%20public%20void%20sing()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20System.out.println(%22%E5%88%98%E5%BE%B7%E5%8D%8E%E5%94%B1%E6%AD%8C%22)%3B%0A%20%20%20%20%20%20%20%20%7D%0A%0A%20%20%20%20%7D%0A%0A%20%20%20%20%2F%2F%20%E4%BB%A3%E7%90%86%E7%B1%BB%E9%9C%80%E8%A6%81%E6%9C%89%E7%9C%9F%E5%AE%9E%E5%AF%B9%E8%B1%A1%E7%9A%84%E6%8E%A7%E5%88%B6%E6%9D%83%20(%E5%BC%95%E7%94%A8)%0A%20%20%20%20class%20ProxyManger%20implements%20IStar%20%7B%0A%20%20%20%20%20%20%20%20%0A%20%20%20%20%20%20%20%20%2F%2F%20%E7%9C%9F%E5%AE%9E%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%BC%95%E7%94%A8%0A%20%20%20%20%20%20%20%20private%20IStar%20star%3B%0A%20%20%20%20%20%20%20%20%0A%20%20%20%20%20%20%20%20public%20ProxyManger()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20super()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%0A%20%20%20%20%20%20%20%20public%20ProxyManger(IStar%20star)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20super()%3B%0A%20%20%20%20%20%20%20%20%20%20%20%20this.star%20%3D%20star%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20%0A%20%20%20%20%20%20%20%20%40Override%0A%20%20%20%20%20%20%20%20public%20void%20sing()%20%7B%0A%E3%80%80%E3%80%80%E3%80%80%E3%80%80%E3%80%80%E3%80%80System.out.println(%22%E5%94%B1%E6%AD%8C%E5%89%8D%E5%87%86%E5%A4%87%22)%3B%0A%20%20%20%20%E3%80%80%E3%80%80%E3%80%80%20star.sing()%3B%0A%20%20%20%E3%80%80%E3%80%80%E3%80%80%E3%80%80System.out.println(%22%E5%96%84%E5%90%8E%E5%B7%A5%E4%BD%9C%22)%3B%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%7D%0Aclass%20Test%7B%0Apublic%20static%20void%20main(String%5B%5D%20args)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20%2F%2F%20%E5%88%9B%E5%BB%BA%E6%98%8E%E6%98%9F%E5%AF%B9%E8%B1%A1%0A%20%20%20%20%20%20%20%20%20%20%20%20IStar%20ldh%20%3D%20new%20LDHStar()%3B%0A%20%20%20%20%20%20%20%20%20%20%20%20ProxyManger%20proxy%20%3D%20new%20ProxyManger(ldh)%3B%0A%20%20%20%20%20%20%20%20%20%20%20%20proxy.sing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%7D%0A%60%60%60%0A**%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86**%0A%E5%9F%BA%E4%BA%8E%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%0A%60%60%60java%0A%E6%B6%89%E5%8F%8A%E7%9A%84%E7%B1%BB%EF%BC%9AProxy%0A%E6%8F%90%E4%BE%9B%E8%80%85%EF%BC%9AJDK%E5%AE%98%E6%96%B9%0A%E5%A6%82%E4%BD%95%E5%88%9B%E5%BB%BA%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%0A%20%20%20%20%20%20%20%E4%BD%BF%E7%94%A8Proxy%E7%B1%BB%E4%B8%AD%E7%9A%84newProxyInstance%E6%96%B9%E6%B3%95%0A%E5%88%9B%E5%BB%BA%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E8%A6%81%E6%B1%82%EF%BC%9A%0A%20%20%20%20%20%20%20%E8%A2%AB%E4%BB%A3%E7%90%86%E7%B1%BB%E6%9C%80%E5%B0%91%E5%AE%9E%E7%8E%B0%E4%B8%80%E4%B8%AA%E6%8E%A5%E5%8F%A3%EF%BC%8C%E5%A6%82%E6%9E%9C%E6%B2%A1%E6%9C%89%E5%88%99%E4%B8%8D%E8%83%BD%E4%BD%BF%E7%94%A8%0AnewProxyInstance%E6%96%B9%E6%B3%95%E7%9A%84%E5%8F%82%E6%95%B0%0A%20%20%20%20%20%20%20%20%20ClassLoader%EF%BC%9A%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%AE%83%E6%98%AF%E7%94%A8%E4%BA%8E%E5%8A%A0%E8%BD%BD%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E5%AD%97%E8%8A%82%E7%A0%81%E3%80%82%E5%92%8C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E4%BD%BF%E7%94%A8%E7%9B%B8%E5%90%8C%E7%9A%84%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8%2C%E5%9B%BA%E5%AE%9A%E5%86%99%E6%B3%95%0A%20%20%20%20%20%20%20%20%20Class%5B%5D%EF%BC%9A%E5%AD%97%E8%8A%82%E7%A0%81%E6%95%B0%E7%BB%84%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%AE%83%E6%98%AF%E7%94%A8%E4%BA%8E%E8%AE%A9%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E5%92%8C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E6%9C%89%E7%9B%B8%E5%90%8C%E6%96%B9%E6%B3%95%E3%80%82%E5%92%8C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E4%BD%BF%E7%94%A8%E7%9B%B8%E5%90%8C%E7%9A%84%E6%8E%A5%E5%8F%A3%EF%BC%8C%E5%9B%BA%E5%AE%9A%E5%86%99%E6%B3%95%0A%20%20%20%20%20%20%20%20%20InvocationHandler%EF%BC%9A%E7%94%A8%E4%BA%8E%E6%8F%90%E4%BE%9B%E5%A2%9E%E5%BC%BA%E7%9A%84%E4%BB%A3%E7%A0%81%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%AE%83%E6%98%AF%E8%AE%A9%E6%88%91%E4%BB%AC%E5%86%99%E5%A6%82%E4%BD%95%E4%BB%A3%E7%90%86%E3%80%82%E6%88%91%E4%BB%AC%E4%B8%80%E8%88%AC%E9%83%BD%E6%98%AF%E5%86%99%E4%B8%80%E4%B8%AA%E8%AF%A5%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%B1%BB%EF%BC%8C%E9%80%9A%E5%B8%B8%E6%83%85%E5%86%B5%E4%B8%8B%E9%83%BD%E6%98%AF%E5%8C%BF%E5%90%8D%E5%86%85%E9%83%A8%E7%B1%BB%EF%BC%8C%E4%BD%86%E4%B8%8D%E6%98%AF%E5%BF%85%E9%A1%BB%E7%9A%84%0A%20%20%20%20%20%20%20%20%20%E6%AD%A4%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%B1%BB%E9%83%BD%E6%98%AF%E8%B0%81%E7%94%A8%E8%B0%81%E5%86%99%E3%80%82%0A%20%20%20%20%20%20%20%20%20%0A%20final%20Producer%20producer%20%3D%20new%20Producer()%3B%20%20%20%20%20%20%0A%20IProducer%20proxyProducer%20%3D%20(IProducer)%20Proxy.newProxyInstance(producer.getClass().getClassLoader()%2C%20producer.getClass().getInterfaces()%2C%20new%20InvocationHandler()%20%7B%0A%2F**%0A*%20%E6%89%A7%E8%A1%8C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E4%BB%BB%E4%BD%95%E6%8E%A5%E5%8F%A3%E6%96%B9%E6%B3%95%E9%83%BD%E4%BC%9A%E7%BB%8F%E8%BF%87%E8%AF%A5%E6%96%B9%E6%B3%95%0A*%20%40param%20proxy%20%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%BC%95%E7%94%A8%0A*%20%40param%20method%20%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E6%96%B9%E6%B3%95%0A*%20%40param%20args%20%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E6%96%B9%E6%B3%95%E7%9A%84%E5%8F%82%E6%95%B0%0A*%20%40return%20%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E6%96%B9%E6%B3%95%E7%9A%84%E8%BF%94%E5%9B%9E%E5%80%BC%0A*%20%40throws%20Throwable%0A*%2F%0Apublic%20Object%20invoke(Object%20proxy%2C%20Method%20method%2C%20Object%5B%5D%20args)%20throws%20Throwable%20%7B%0A%20%20%20%20%2F%2F%E6%8F%90%E4%BE%9B%E5%A2%9E%E5%BC%BA%E7%9A%84%E4%BB%A3%E7%A0%81%0A%20%20%20%20Object%20returnValue%20%3D%20null%3B%0A%20%20%20%20%2F%2F1.%E8%8E%B7%E5%8F%96%E6%96%B9%E6%B3%95%E6%89%A7%E8%A1%8C%E7%9A%84%E5%87%BD%E6%95%B0%0A%20%20%20%20Float%20money%20%3D%20(Float)args%5B0%5D%3B%0A%20%20%20%20%2F%2F2.%E5%88%A4%E6%96%AD%E5%BD%93%E5%89%8D%E6%96%B9%E6%B3%95%E6%98%AF%E4%B8%8D%E6%98%AF%E9%94%80%E5%94%AE%0A%20%20%20%20if(%22sellProduct%22.equals(method.getName()))%7B%0A%20%20%20%20%20%20%20%20%2F%2F%E8%B0%83%E7%94%A8%E5%8E%9F%E5%85%88%E6%96%B9%E6%B3%95%E8%BF%9B%E8%A1%8C%E6%96%B9%E6%B3%95%E5%A2%9E%E5%BC%BA%0A%20%20%20%20%20%20%20%20%2F%2Fproducer%E6%98%AF%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%0A%20%20%20%20%20%20%20%20returnValue%20%3D%20method.invoke(producer%2Cmoney*0.8f)%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20returnValue%3B%0A%7D%0A%7D)%3B%0A%60%60%60%0A**Cglib%E4%BB%A3%E7%90%86**%0A%E5%9F%BA%E4%BA%8E%E5%AD%90%E7%B1%BB%E7%9A%84%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%0A%60%60%60java%0A%E6%B6%89%E5%8F%8A%E7%9A%84%E7%B1%BB%EF%BC%9AEnhancer%0A%E6%8F%90%E4%BE%9B%E8%80%85%EF%BC%9A%E7%AC%AC%E4%B8%89%E6%96%B9cglib%E5%BA%93%0A%E5%A6%82%E4%BD%95%E5%88%9B%E5%BB%BA%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%0A%20%20%20%20%20%20%20%20%E4%BD%BF%E7%94%A8Enhancer%E7%B1%BB%E4%B8%AD%E7%9A%84create%E6%96%B9%E6%B3%95%0A%E5%88%9B%E5%BB%BA%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E8%A6%81%E6%B1%82%EF%BC%9A%0A%20%20%20%20%20%20%20%20%E8%A2%AB%E4%BB%A3%E7%90%86%E7%B1%BB%E4%B8%8D%E8%83%BD%E4%BD%BF%E6%9C%80%E7%BB%88%E7%B1%BB%0Acreate%E6%96%B9%E6%B3%95%E7%9A%84%E5%8F%82%E6%95%B0%0A%20%20%20%20%20%20%20%20%20Class%EF%BC%9A%E5%AD%97%E8%8A%82%E7%A0%81%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%AE%83%E6%98%AF%E7%94%A8%E4%BA%8E%E6%8C%87%E5%AE%9A%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%AD%97%E8%8A%82%E7%A0%81%0A%20%20%20%20%20%20%20%20%20Callback%EF%BC%9A%E7%94%A8%E4%BA%8E%E6%8F%90%E4%BE%9B%E5%A2%9E%E5%BC%BA%E7%9A%84%E4%BB%A3%E7%A0%81%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%AE%83%E6%98%AF%E8%AE%A9%E6%88%91%E4%BB%AC%E5%86%99%E5%A6%82%E4%BD%95%E4%BB%A3%E7%90%86%E3%80%82%E6%88%91%E4%BB%AC%E4%B8%80%E8%88%AC%E9%83%BD%E6%98%AF%E5%86%99%E4%B8%80%E4%B8%AA%E8%AF%A5%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%B1%BB%EF%BC%8C%E9%80%9A%E5%B8%B8%E6%83%85%E5%86%B5%E4%B8%8B%E9%83%BD%E6%98%AF%E5%8C%BF%E5%90%8D%E5%86%85%E9%83%A8%E7%B1%BB%EF%BC%8C%E4%BD%86%E4%B8%8D%E6%98%AF%E5%BF%85%E9%A1%BB%E7%9A%84%0A%20%20%20%20%20%20%20%20%20%20%20%20%E6%AD%A4%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%B1%BB%E9%83%BD%E6%98%AF%E8%B0%81%E7%94%A8%E8%B0%81%E5%86%99%E3%80%82%0A%20%20%20%20%20%20%20%20%20%20%20%20%E4%B8%80%E8%88%AC%E5%86%99%E7%9A%84%E9%83%BD%E6%98%AF%E8%AF%A5%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AD%90%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%B1%BB%EF%BC%9AMethodIntercepter%0Afinal%20Producer%20producer%20%3D%20new%20Producer()%3B%0AProducer%20cglibProducer%20%3D%20(Producer)%20Enhancer.create(Producer.class%2C%20new%20MethodInterceptor()%20%7B%0A%20%20%20%20%2F**%0A%20%20%20%20%20*%20%E6%89%A7%E8%A1%8C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E4%BB%BB%E4%BD%95%E6%96%B9%E6%B3%95%E9%83%BD%E4%BC%9A%E7%BB%8F%E8%BF%87%E8%AF%A5%E6%96%B9%E6%B3%95%0A%20%20%20%20%20*%20%40param%20o%20%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%BC%95%E7%94%A8%0A%20%20%20%20%20*%20%40param%20method%20%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E5%BD%93%E5%89%8D%E6%89%A7%E8%A1%8C%E6%96%B9%E6%B3%95%E7%9A%84%E6%96%B9%E6%B3%95%0A%20%20%20%20%20*%20%40param%20args%20%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E5%BD%93%E5%89%8D%E6%89%A7%E8%A1%8C%E6%96%B9%E6%B3%95%E7%9A%84%E5%8F%82%E6%95%B0%0A%20%20%20%20%20*%20%20%E4%BB%A5%E4%B8%8A%E4%B8%89%E4%B8%AA%E5%8F%82%E6%95%B0%E5%92%8C%E5%9F%BA%E4%BA%8E%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%ADinvoke%E6%96%B9%E6%B3%95%E7%9A%84%E5%8F%82%E6%95%B0%E4%B8%80%E6%A0%B7%0A%20%20%20%20%20*%20%40param%20methodProxy%20%E5%BD%93%E5%89%8D%E6%89%A7%E8%A1%8C%E6%96%B9%E6%B3%95%E7%9A%84%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%0A%20%20%20%20%20*%20%40return%20%E5%92%8C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E6%96%B9%E6%B3%95%E6%9C%89%E7%9B%B8%E5%90%8C%E7%9A%84%E8%BF%94%E5%9B%9E%E5%80%BC%0A%20%20%20%20%20*%20%40throws%20Throwable%0A%20%20%20%20%20*%2F%0A%20%20%20%20public%20Object%20intercept(Object%20o%2C%20Method%20method%2C%20Object%5B%5D%20args%2C%20MethodProxy%20methodProxy)%20throws%20Throwable%20%7B%0A%20%20%20%20%20%20%20%20%2F%2F%E6%8F%90%E4%BE%9B%E5%A2%9E%E5%BC%BA%E7%9A%84%E4%BB%A3%E7%A0%81%0A%20%20%20%20%20%20%20%20Object%20returnValue%20%3D%20null%3B%0A%20%20%20%20%20%20%20%20%2F%2F1.%E8%8E%B7%E5%8F%96%E6%96%B9%E6%B3%95%E6%89%A7%E8%A1%8C%E7%9A%84%E5%87%BD%E6%95%B0%0A%20%20%20%20%20%20%20%20Float%20money%20%3D%20(Float)args%5B0%5D%3B%0A%20%20%20%20%20%20%20%20%2F%2F2.%E5%88%A4%E6%96%AD%E5%BD%93%E5%89%8D%E6%96%B9%E6%B3%95%E6%98%AF%E4%B8%8D%E6%98%AF%E9%94%80%E5%94%AE%0A%20%20%20%20%20%20%20%20if(%22sellProduct%22.equals(method.getName()))%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20%2F%2F%E8%B0%83%E7%94%A8%E5%8E%9F%E5%85%88%E6%96%B9%E6%B3%95%E8%BF%9B%E8%A1%8C%E6%96%B9%E6%B3%95%E5%A2%9E%E5%BC%BA%0A%20%20%20%20%20%20%20%20%20%20%20%20%2F%2Fproducer%E6%98%AF%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%0A%20%20%20%20%20%20%20%20%20%20%20%20returnValue%20%3D%20method.invoke(producer%2Cmoney*0.8f)%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20return%20returnValue%3B%0A%20%20%20%20%7D%0A%7D)%3B%0AcglibProducer.sellProduct(12000f)%3B%0A%60%60%60%0A**%E4%B8%89%E4%B8%AA%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F%E6%AF%94%E8%BE%83**%0A%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86%E5%92%8C%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E9%83%BD%E6%98%AF%E5%9F%BA%E4%BA%8E%E6%8E%A5%E5%8F%A3%E7%9A%84%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F%EF%BC%9BCglib%E6%98%AF%E5%9F%BA%E4%BA%8E%E7%B1%BB%E7%9A%84%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F%0A%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%8E%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E5%B7%AE%E5%88%AB%EF%BC%9A%E9%9D%99%E6%80%81%E4%BB%A3%E7%90%86%E8%A6%81%E9%92%88%E5%AF%B9%E6%AF%8F%E4%B8%AA%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%BC%96%E5%86%99%E5%AE%9E%E7%8E%B0%E7%B1%BB%EF%BC%8C%E5%A6%82%E6%9E%9C%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E8%BE%83%E5%A4%9A%EF%BC%8C%E5%88%99%E8%A6%81%E5%AE%9E%E7%8E%B0%E5%BE%88%E5%A4%9A%E4%BB%A3%E7%90%86%E7%B1%BB%EF%BC%8C%E7%83%A6%E7%90%90%E3%80%82%0A%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%8ECglib%E4%BB%A3%E7%90%86%E7%9A%84%E5%B7%AE%E5%88%AB%EF%BC%9A%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E9%9C%80%E8%A6%81%E8%A2%AB%E4%BB%A3%E7%90%86%E7%B1%BB%E6%9C%89%E4%B8%80%E4%B8%AA%E6%8A%BD%E8%B1%A1%E6%8E%A5%E5%8F%A3%EF%BC%8CCglib%E4%BB%A3%E7%90%86%E9%9C%80%E8%A6%81%E8%A2%AB%E4%BB%A3%E7%90%86%E7%B1%BB%E4%B8%8D%E6%98%AF%E6%9C%80%E7%BB%88%E7%B1%BB%0A%23%23%23%23%20AOP%E7%9A%84%E6%A6%82%E5%BF%B5%0A**Aspect%20Oriented%20Programming%EF%BC%9A%E9%9D%A2%E5%90%91%E5%88%87%E9%9D%A2%E7%BC%96%E7%A8%8B**%0A**%E5%AE%9A%E4%B9%89**%EF%BC%9A%E9%80%9A%E8%BF%87%E9%A2%84%E7%BC%96%E8%AF%91%E6%96%B9%E5%BC%8F%E5%92%8C%E8%BF%90%E8%A1%8C%E5%99%A8%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E5%AE%9E%E7%8E%B0%E7%A8%8B%E5%BA%8F%E5%8A%9F%E8%83%BD%E7%9A%84%E7%BB%9F%E4%B8%80%E7%BB%B4%E6%8A%A4%E7%9A%84%E4%B8%80%E7%A7%8D%E6%8A%80%E6%9C%AF%E3%80%82AOP%E6%98%AFOOP(Object%20Oriented%20Programming)%E7%9A%84%E5%BB%B6%E7%BB%AD%EF%BC%8C%E4%B9%9F%E6%98%AFSpring%E6%A1%86%E6%9E%B6%E7%9A%84%E4%B8%80%E4%B8%AA%E9%87%8D%E8%A6%81%E5%86%85%E5%AE%B9%EF%BC%8C%E6%98%AF%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B%E7%9A%84%E4%B8%80%E7%A7%8D%E8%A1%8D%E7%94%9F%E6%B3%9B%E5%9E%8B%E3%80%82%0A**%E4%BD%9C%E7%94%A8**%EF%BC%9A%E6%8A%8A%E7%A8%8B%E5%BA%8F%E7%9A%84%E9%87%8D%E5%A4%8D%E9%83%A8%E5%88%86%E6%8A%BD%E5%8F%96%E5%87%BA%E6%9D%A5%EF%BC%8C%E5%9C%A8%E9%9C%80%E8%A6%81%E6%89%A7%E8%A1%8C%E7%9A%84%E6%97%B6%E5%80%99%EF%BC%8C%E4%BD%BF%E7%94%A8%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E6%8A%80%E6%9C%AF%EF%BC%8C%E5%9C%A8%E4%B8%8D%E4%BF%AE%E6%94%B9%E6%BA%90%E7%A0%81%E7%9A%84%E5%9F%BA%E7%A1%80%E4%B8%8A%EF%BC%8C%E5%AF%B9%E6%96%B9%E6%B3%95%E8%BF%9B%E8%A1%8C%E5%A2%9E%E5%BC%BA%0A**%E4%BC%98%E5%8A%BF**%EF%BC%9A%E5%87%8F%E5%B0%91%E9%87%8D%E5%A4%8D%E4%BB%A3%E7%A0%81%E3%80%81%E6%8F%90%E9%AB%98%E5%BC%80%E5%8F%91%E6%95%88%E7%8E%87%E3%80%81%E7%BB%B4%E6%8A%A4%E6%96%B9%E4%BE%BF%0A**%E4%B8%BE%E4%BE%8B**%EF%BC%9A%E4%B8%9A%E5%8A%A1%E5%B1%82%E8%B0%83%E7%94%A8%E6%8C%81%E4%B9%85%E5%B1%82%E6%96%B9%E6%B3%95%EF%BC%88%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%EF%BC%89%EF%BC%8C%E7%84%B6%E5%90%8E%E5%B0%86%E8%BF%99%E4%BA%9B%E6%96%B9%E6%B3%95%E5%8C%85%E8%A3%85%E5%AE%9E%E7%8E%B0%E5%8A%9F%E8%83%BD%EF%BC%8C%E4%B8%BA%E4%BA%86%E6%BB%A1%E8%B6%B3%E5%8A%9F%E8%83%BD%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%EF%BC%8C%E9%9C%80%E8%A6%81%E8%AE%A9%E6%AF%8F%E4%B8%AA%E5%8A%9F%E8%83%BD%E9%83%BD%E6%98%AF%E4%B8%80%E4%B8%AA%E4%BA%8B%E5%8A%A1%EF%BC%8C%E5%9B%A0%E6%AD%A4%E5%AF%B9%E4%BA%8E%E6%AF%8F%E4%B8%AA%E5%8A%9F%E8%83%BD%E9%83%BD%E9%9C%80%E8%A6%81%E6%B7%BB%E5%8A%A0%E4%BA%8B%E5%8A%A1%E6%93%8D%E4%BD%9C%EF%BC%8C%E8%BF%99%E9%83%A8%E5%88%86%E5%B0%B1%E5%B1%9E%E4%BA%8E%E9%87%8D%E5%A4%8D%E9%83%A8%E5%88%86%EF%BC%8C%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E6%8A%80%E6%9C%AF%E7%9B%B4%E6%8E%A5%E5%AF%B9%E6%8C%81%E4%B9%85%E5%B1%82%E6%96%B9%E6%B3%95%E8%BF%9B%E8%A1%8C%E5%A2%9E%E5%BC%BA%E3%80%82%0A**%E5%AE%9E%E7%8E%B0%E6%96%B9%E5%BC%8F**%EF%BC%9A%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%0A%23%23%23%23%20spring%E4%B8%ADAOP%E7%9B%B8%E5%85%B3%E6%9C%AF%E8%AF%AD%0A**JoinPoint%EF%BC%88%E8%BF%9E%E6%8E%A5%E7%82%B9%EF%BC%89**%EF%BC%9A%E6%8C%87%E8%A2%AB%E6%8B%A6%E6%88%AA%E5%88%B0%E7%9A%84%E7%82%B9%E3%80%82%E5%9C%A8spring%E4%B8%AD%E6%8C%87%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E6%96%B9%E6%B3%95%EF%BC%8C%E5%9B%A0%E4%B8%BAspring%E5%8F%AA%E6%94%AF%E6%8C%81%E6%96%B9%E6%B3%95%E7%B1%BB%E5%9E%8B%E7%9A%84%E8%BF%9E%E6%8E%A5%E7%82%B9%E3%80%82%0A**Pointcut%EF%BC%88%E5%88%87%E5%85%A5%E7%82%B9%EF%BC%89**%EF%BC%9A%E5%AF%B9%E4%B8%8E%E8%A6%81%E6%8B%A6%E6%88%AA%E7%9A%84JoinPoint%E7%9A%84%E5%AE%9A%E4%B9%89%EF%BC%8C%E5%B0%B1%E6%98%AF%E9%9C%80%E8%A6%81%E5%A2%9E%E5%BC%BA%E7%9A%84%E6%96%B9%E6%B3%95%0A**Advice%EF%BC%88%E9%80%9A%E7%9F%A5%2F%E5%A2%9E%E5%BC%BA%EF%BC%89**%EF%BC%9A%E6%8B%A6%E6%88%AA%E5%88%B0JoinPoint%E5%90%8E%E7%9A%84%E5%A4%84%E7%90%86%E3%80%82%0A%E9%80%9A%E7%9F%A5%E7%9A%84%E7%B1%BB%E5%9E%8B%EF%BC%9A%E5%89%8D%E7%BD%AE%E9%80%9A%E7%9F%A5%E3%80%81%E5%90%8E%E7%BD%AE%E9%80%9A%E7%9F%A5%E3%80%81%E5%BC%82%E5%B8%B8%E9%80%9A%E7%9F%A5%E3%80%81%E6%9C%80%E7%BB%88%E9%80%9A%E7%9F%A5%E3%80%81%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%EF%BC%88%E6%95%B4%E4%B8%AAinvoke%E6%96%B9%E6%B3%95%EF%BC%89%0A**Introduction%EF%BC%88%E5%BC%95%E4%BB%8B%EF%BC%89**%EF%BC%9A%E4%B8%80%E7%A7%8D%E7%89%B9%E6%AE%8A%E7%9A%84%E9%80%9A%E7%9F%A5%EF%BC%8C%E5%9C%A8%E4%B8%8D%E4%BF%AE%E6%94%B9%E7%B1%BB%E4%BB%A3%E7%A0%81%E7%9A%84%E5%89%8D%E6%8F%90%E4%B8%8B%EF%BC%8CIntroduction%E5%8F%AF%E4%BB%A5%E5%9C%A8%E8%BF%90%E8%A1%8C%E6%9C%9F%E4%B8%BA%E7%B1%BB%E5%8A%A8%E6%80%81%E6%B7%BB%E5%8A%A0%E4%B8%80%E4%BA%9B%E6%96%B9%E6%B3%95%E6%88%96Field%E3%80%82%0A**Target%EF%BC%88%E7%9B%AE%E6%A0%87%E5%AF%B9%E8%B1%A1%EF%BC%89**%EF%BC%9A%E8%A2%AB%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%0A**Weabing%EF%BC%88%E7%BB%87%E5%85%A5%EF%BC%89**%EF%BC%9A%E6%8A%8A%E5%A2%9E%E5%BC%BA%E5%BA%94%E7%94%A8%E5%88%B0%E7%9B%AE%E6%A0%87%E5%AF%B9%E8%B1%A1%E6%9D%A5%E5%88%9B%E5%BB%BA%E6%96%B0%E7%9A%84%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%E7%9A%84%E8%BF%87%E7%A8%8B%0Aspring%E9%87%87%E7%94%A8%E7%9A%84%E6%98%AF%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E7%BB%87%E5%85%A5%EF%BC%8C%E8%80%8CAspectJ%E9%87%87%E7%94%A8%E7%9A%84%E6%98%AF%E7%BC%96%E8%AF%91%E5%99%A8%E7%BB%87%E5%85%A5%E5%92%8C%E7%B1%BB%E8%A3%85%E8%BD%BD%E6%9C%9F%E7%BB%87%E5%85%A5%0A**Proxy%EF%BC%88%E4%BB%A3%E7%90%86%EF%BC%89**%20%EF%BC%9A%E4%B8%80%E4%B8%AA%E7%B1%BB%E8%A2%ABAOP%E7%BB%87%E5%85%A5%E5%A2%9E%E5%BC%BA%E5%90%8E%EF%BC%8C%E5%B0%B1%E4%BA%A7%E7%94%9F%E4%BA%86%E4%B8%80%E4%B8%AA%E7%BB%93%E6%9E%9C%E4%BB%A3%E7%90%86%E7%B1%BB%EF%BC%8C%E5%8D%B3%E4%BB%A3%E7%90%86%E5%AF%B9%E8%B1%A1%0A**Aspect%EF%BC%88%E5%88%87%E9%9D%A2%EF%BC%89**%EF%BC%9A%E5%88%87%E5%85%A5%E7%82%B9%E5%92%8C%E9%80%9A%E7%9F%A5%E7%9A%84%E7%BB%93%E5%90%88%EF%BC%8C%E4%B8%AA%E4%BA%BA%E5%BA%94%E8%AF%A5%E5%B0%B1%E6%98%AF%E9%87%8D%E5%86%99%E7%9A%84%E9%82%A3%E6%AE%B5%E4%BB%A3%E7%A0%81%0A%23%23%23%23%20spring%E7%9A%84AOP%E4%BD%BF%E7%94%A8%0A!%5B04a6df78dafcaaf45ea005f20f999a4c.png%5D(en-resource%3A%2F%2Fdatabase%2F899%3A1)%0A%23%23%23%23%20spring%E4%B8%AD%E5%9F%BA%E4%BA%8EXML%E5%92%8C%E6%B3%A8%E8%A7%A3%E7%9A%84AOP%E9%85%8D%E7%BD%AE%0A%23%23%23%23%23%20%E5%9F%BA%E4%BA%8EXML%E7%9A%84AOP%E9%85%8D%E7%BD%AE%0A**AOP%E9%85%8D%E7%BD%AE%E6%AD%A5%E9%AA%A4**%0A%60%60%60java%0Aspring%E4%B8%AD%E5%9F%BA%E4%BA%8Exml%E7%9A%84AOP%E9%85%8D%E7%BD%AE%E6%AD%A5%E9%AA%A4%EF%BC%9A%0A1%E3%80%81%E6%8A%8A%E9%80%9A%E7%9F%A5bean%E4%BA%A4%E7%BB%99spring%E6%9D%A5%E7%AE%A1%E7%90%86%0A2%E3%80%81%E4%BD%BF%E7%94%A8aop%3Aconfig%E6%A0%87%E7%AD%BE%E8%A1%A8%E6%98%8E%E5%BC%80%E5%A7%8BAOP%E7%9A%84%E9%85%8D%E7%BD%AE%0A3%E3%80%81%E4%BD%BF%E7%94%A8aop%3Aaspect%E6%A0%87%E7%AD%BE%E8%A1%A8%E6%98%8E%E9%85%8D%E7%BD%AE%E5%88%87%E9%9D%A2%0A%20%20%20%20%E5%B1%9E%E6%80%A7%20%EF%BC%9A%0A%20%20%20%20%20%20%20%20id%EF%BC%9A%E7%BB%99%E5%88%87%E9%9D%A2%E6%8F%90%E4%BE%9B%E4%B8%80%E4%B8%AA%E5%94%AF%E4%B8%80%E6%A0%87%E8%AF%86%0A%20%20%20%20%20%20%20%20ref%EF%BC%9A%E6%89%A7%E8%A1%8C%E9%80%9A%E7%9F%A5%E7%B1%BBbean%E7%9A%84id%E6%A0%87%E8%AF%86%0A4%E3%80%81%E5%9C%A8aop%3Aaspect%E6%A0%87%E7%AD%BE%E7%9A%84%E5%86%85%E9%83%A8%E4%BD%BF%E7%94%A8%E5%AF%B9%E5%BA%94%E6%A0%87%E7%AD%BE%E6%9D%A5%E9%85%8D%E7%BD%AE%E9%80%9A%E7%9F%A5%E7%9A%84%E7%B1%BB%E5%9E%8B%0A%20%20%20%20%E6%A0%87%E7%AD%BE%EF%BC%9A%0A%20%20%20%20%20%20%20%20aop%3Abefore%EF%BC%9A%E8%A1%A8%E7%A4%BA%E9%85%8D%E7%BD%AE%E5%89%8D%E7%BD%AE%E9%80%9A%E7%9F%A5%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%B1%9E%E6%80%A7%EF%BC%9A%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20method%EF%BC%9A%E6%8C%87%E5%AE%9A%E9%80%9A%E7%9F%A5%E7%B1%BB%E4%B8%AD%E5%93%AA%E4%B8%80%E4%B8%AA%E6%96%B9%E6%B3%95%E6%98%AF%E5%89%8D%E7%BD%AE%E9%80%9A%E7%9F%A5%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20pointcut%EF%BC%9A%E6%8C%87%E5%AE%9A%E5%88%87%E5%85%A5%E7%82%B9%E8%A1%A8%E8%BE%BE%E5%BC%8F%EF%BC%8C%E8%AF%A5%E8%A1%A8%E8%BE%BE%E5%BC%8F%E5%90%AB%E4%B9%89%E6%98%AF%E6%8C%87%E5%AF%B9%E4%B8%9A%E5%8A%A1%E5%B1%82%E4%B8%AD%E5%93%AA%E4%BA%9B%E6%96%B9%E6%B3%95%E5%A2%9E%E5%BC%BA%0A%E5%88%87%E5%85%A5%E7%82%B9%E8%A1%A8%E8%BE%BE%E5%BC%8F%E7%9A%84%E5%86%99%E6%B3%95%EF%BC%9A%0A%20%20%20%20%E5%85%B3%E9%94%AE%E5%AD%97%EF%BC%9Aexecution%EF%BC%88%E8%A1%A8%E8%BE%BE%E5%BC%8F%EF%BC%89%0A%20%20%20%20%E8%A1%A8%E8%BE%BE%E5%BC%8F%EF%BC%9A%0A%20%20%20%20%20%20%20%20%E8%AE%BF%E9%97%AE%E4%BF%AE%E9%A5%B0%E7%AC%A6%E3%80%81%E8%BF%94%E5%9B%9E%E5%80%BC%E3%80%81%E5%8F%82%E6%95%B0%E5%88%97%E8%A1%A8%0A%20%20%20%20%E4%B8%BE%E4%BE%8B%EF%BC%9A%0A%20%20%20%20%20%20%20%20public%20void%20com.itheima.service.impl.AccountServiceImpl.saveAccount()%0A%20%20%20%20%E8%AE%BF%E9%97%AE%E4%BF%AE%E9%A5%B0%E7%AC%A6%E5%8F%AF%E4%BB%A5%E7%9C%81%E7%95%A5%0A%20%20%20%20%E8%BF%94%E5%9B%9E%E5%80%BC%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8%E9%80%9A%E9%85%8D%E7%AC%A6%EF%BC%8C%E8%A1%A8%E7%A4%BA%E8%BF%94%E5%9B%9E%E4%BB%BB%E6%84%8F%E5%80%BC%0A%20%20%20%20%E5%8C%85%E5%90%8D%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8%E9%80%9A%E9%85%8D%E7%AC%A6%EF%BC%8C%E8%A1%A8%E7%A4%BA%E4%BB%BB%E6%84%8F%E5%8C%85%E3%80%82%E4%BD%86%E6%98%AF%E6%AF%8F%E4%B8%80%E4%B8%AA%E5%B1%82%E7%BA%A7%E9%83%BD%E9%9C%80%E8%A6%81%E5%86%99%E4%B8%80%E4%B8%AA*%0A%20%20%20%20%E5%8C%85%E5%90%8D%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8..%E8%A1%A8%E7%A4%BA%E5%BD%93%E5%89%8D%E5%8C%85%E5%8F%8A%E5%85%B6%E5%AD%90%E5%8C%85%0A%20%20%20%20%E7%B1%BB%E5%90%8D%E5%92%8C%E6%96%B9%E6%B3%95%E5%90%8D%E9%83%BD%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8*%E5%AE%9E%E7%8E%B0%E9%80%9A%E9%85%8D%0A%20%20%20%20%E5%8F%82%E6%95%B0%E5%88%97%E8%A1%A8%EF%BC%9A%0A%20%20%20%20%20%20%20%20%E5%8F%AF%E4%BB%A5%E7%9B%B4%E6%8E%A5%E5%86%99%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B%EF%BC%9A%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%9F%BA%E6%9C%AC%E7%B1%BB%E5%90%8D%E7%9B%B4%E6%8E%A5%E5%86%99%E5%90%8D%E7%A7%B0%E7%9A%84%E6%96%B9%E6%B3%95%20%20%20%20int%0A%20%20%20%20%20%20%20%20%20%20%20%20%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B%E5%86%99%E5%8C%85%E5%90%8D.%E7%B1%BB%E5%90%8D%E7%9A%84%E6%96%B9%E6%B3%95%20%20%20java.lang.String%0A%20%20%20%20%20%20%20%20%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8%E9%80%9A%E9%85%8D%E7%AC%A6%E8%A1%A8%E7%A4%BA%E4%BB%BB%E6%84%8F%E7%B1%BB%E5%9E%8B%EF%BC%8C%E4%BD%86%E6%98%AF%E5%BF%85%E9%A1%BB%E6%9C%89%E5%8F%82%E6%95%B0%0A%20%20%20%20%20%20%20%20%E5%8F%AF%E4%BB%A5%E4%BD%BF%E7%94%A8..%E8%A1%A8%E7%A4%BA%E6%9C%89%E6%97%A0%E5%8F%82%E6%95%B0%E5%9D%87%E5%8F%AF%EF%BC%8C%E6%9C%89%E5%8F%82%E6%95%B0%E5%8F%AF%E4%BB%A5%E4%BD%BF%E4%BB%BB%E6%84%8F%E7%B1%BB%E5%9E%8B%0A%20%20%20%20%E5%85%A8%E9%80%9A%E9%85%8D%E5%86%99%E6%B3%95%EF%BC%9A%0A%20%20%20%20%20%20%20%20*%20*..*.*(..)%0A%20%20%20%20%E5%AE%9E%E9%99%85%E5%BC%80%E5%8F%91%E4%B8%AD%E5%88%87%E5%85%A5%E7%82%B9%E8%A1%A8%E8%BE%BE%E5%BC%8F%E7%9A%84%E9%80%9A%E5%B8%B8%E5%86%99%E6%B3%95%EF%BC%9A%0A%20%20%20%20%20%20%20%20%E5%88%87%E5%88%B0%E4%B8%9A%E5%8A%A1%E5%B1%82%E5%AE%9E%E7%8E%B0%E7%B1%BB%E4%B8%8B%E7%9A%84%E6%89%80%E6%9C%89%E6%96%B9%E6%B3%95%EF%BC%9A%0A%20%20%20%20%20%20%20%20%20%20%20%20*%20com.itheim.service.impl.*.*(..)%0A%60%60%60%0A**%E7%BB%86%E8%8A%82%E6%8F%8F%E8%BF%B0**%3A%E5%88%87%E5%85%A5%E7%82%B9%E8%A1%A8%E8%BE%BE%E5%BC%8F%E7%9A%84%E8%A7%A3%E6%9E%90%E6%98%AF%E7%94%B1aspectj%EF%BC%88jar%EF%BC%89%E5%AE%9E%E7%8E%B0%E7%9A%84%0A!%5B560cfd4218708825f0df6f87cceefa15.png%5D(en-resource%3A%2F%2Fdatabase%2F901%3A1)%0A**XML%E7%9A%84AOP%E9%85%8D%E7%BD%AE%E8%AF%B4%E6%98%8E**%0A!%5B6d085fadc9398799fd045a701f79f4fb.png%5D(en-resource%3A%2F%2Fdatabase%2F900%3A1)%0A**%E5%9B%9B%E7%A7%8D%E9%80%9A%E7%9F%A5%EF%BC%88%E5%89%8D%E7%BD%AE%E3%80%81%E5%90%8E%E7%BD%AE%E3%80%81%E5%BC%82%E5%B8%B8%E3%80%81%E6%9C%80%E7%BB%88%EF%BC%89%E7%9A%84XML%E9%85%8D%E7%BD%AE**%0A!%5B4a396f54466e0992af5018c522e8bef6.png%5D(en-resource%3A%2F%2Fdatabase%2F902%3A1)%0A**%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E7%9A%84%E9%85%8D%E7%BD%AE**%0AXML%E9%85%8D%E7%BD%AE%E5%92%8C%E5%89%8D%E9%9D%A24%E7%A7%8D%E4%B8%80%E6%A0%B7%0A!%5Bbb48f5426f993ef5f6d7cbd139f3b1e4.png%5D(en-resource%3A%2F%2Fdatabase%2F903%3A1)%0A%E5%A2%9E%E5%BC%BA%E6%96%B9%E6%B3%95%E7%9A%84%E9%85%8D%E7%BD%AE%0A%60%60%60java%0A%2F**%0A%20*%20%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%0A%20*%20%E9%97%AE%E9%A2%98%EF%BC%9A%0A%20*%20%20%20%20%20%20%E5%BD%93%E9%85%8D%E7%BD%AE%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E5%90%8E%EF%BC%8C%E5%88%87%E5%85%A5%E7%82%B9%E6%96%B9%E6%B3%95%E6%B2%A1%E6%89%A7%E8%A1%8C%EF%BC%8C%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E6%89%A7%E8%A1%8C%E4%BA%86%0A%20*%20%E5%88%86%E6%9E%90%EF%BC%9A%0A%20*%20%20%20%20%20%20%E9%80%9A%E8%BF%87%E5%AF%B9%E6%AF%94%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%AD%E7%9A%84%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E4%BB%A3%E7%A0%81%EF%BC%8C%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%AD%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E6%9C%89%E6%98%8E%E7%A1%AE%E7%9A%84%E5%88%87%E5%85%A5%E7%82%B9%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8%0A%20*%20%E8%A7%A3%E5%86%B3%EF%BC%9A%0A%20*%20%20%20%20%20%20spring%E6%A1%86%E6%9E%B6%E4%B8%BA%E6%88%91%E4%BB%AC%E6%8F%90%E4%BE%9B%E4%B8%80%E4%B8%AA%E6%8E%A5%E5%8F%A3%EF%BC%9AProceedingJoinPoint%E3%80%82%E8%AF%A5%E6%8E%A5%E5%8F%A3%E6%9C%89%E4%B8%80%E4%B8%AA%E6%96%B9%E6%B3%95proceed()%EF%BC%8C%E6%AD%A4%E6%96%B9%E6%B3%95%E5%B0%B1%E7%9B%B8%E5%BD%93%E4%BA%8E%E6%98%8E%E7%A1%AE%E8%B0%83%E7%94%A8%E5%88%87%E5%85%A5%E7%82%B9%E6%96%B9%E6%B3%95%E3%80%82%0A%20*%20%20%20%20%20%20%E8%AF%A5%E6%8E%A5%E5%8F%A3%E5%8F%AF%E4%BB%A5%E4%BD%9C%E4%B8%BA%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E7%9A%84%E6%96%B9%E6%B3%95%E5%8F%82%E6%95%B0%EF%BC%8C%E5%9C%A8%E7%A8%8B%E5%BA%8F%E6%89%A7%E8%A1%8C%E6%97%B6%EF%BC%8Cspring%E6%A1%86%E6%9E%B6%E4%BC%9A%E4%B8%BA%E6%88%91%E4%BB%AC%E6%8F%90%E4%BE%9B%E8%AF%A5%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%B1%BB%E4%BE%9B%E6%88%91%E4%BB%AC%E4%BD%BF%E7%94%A8%0A%20*%20spring%E4%B8%AD%E7%9A%84%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%EF%BC%9A%0A%20*%20%20%20%20%20%20%E5%AE%83%E6%98%AFspring%E6%A1%86%E6%9E%B6%E4%B8%BA%E6%88%91%E4%BB%AC%E6%8F%90%E4%BE%9B%E7%9A%84%E4%B8%80%E7%A7%8D%E5%8F%AF%E4%BB%A5%E5%9C%A8%E4%BB%A3%E7%A0%81%E4%B8%AD%E6%89%8B%E5%8A%A8%E6%8E%A7%E5%88%B6%E5%A2%9E%E5%BC%BA%E6%96%B9%E6%B3%95%E4%BD%95%E6%97%B6%E6%89%A7%E8%A1%8C%E7%9A%84%E6%96%B9%E5%BC%8F%0A%20*%2F%0Apublic%20Object%20aroundPrintLog(ProceedingJoinPoint%20proceedingJoinPoint)%7B%0A%20%20%20%20Object%20rtValue%20%3D%20null%3B%0A%20%20%20%20try%20%7B%0A%20%20%20%20%20%20%20%20Object%5B%5D%20args%20%3D%20proceedingJoinPoint.getArgs()%3B%0A%20%20%20%20%20%20%20%20rtValue%20%3D%20proceedingJoinPoint.proceed(args)%3B%0A%20%20%20%20%20%20%20%20return%20rtValue%3B%0A%20%20%20%20%7D%20catch%20(Throwable%20throwable)%20%7B%0A%20%20%20%20%20%20%20%20throw%20new%20RuntimeException(throwable)%3B%0A%20%20%20%20%7Dfinally%20%7B%0A%20%20%20%20%7D%0A%7D%0A%60%60%60%0A**%E6%B3%A8%E6%84%8F**%EF%BC%9Aspring%E6%B3%A8%E8%A7%A3%E9%85%8D%E7%BD%AE%E7%9A%84%E5%89%8D%E5%9B%9B%E7%A7%8D%E9%80%9A%E7%9F%A5%E6%89%A7%E8%A1%8C%E7%9A%84%E9%A1%BA%E5%BA%8F%E5%AD%98%E5%9C%A8%E9%97%AE%E9%A2%98%EF%BC%8C%E6%89%80%E4%BB%A5%E5%BB%BA%E8%AE%AE%E4%BD%BF%E7%94%A8%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E9%85%8D%E7%BD%AE%0A%23%23%23%23%23%20%E5%9F%BA%E4%BA%8E%E6%B3%A8%E8%A7%A3%E7%9A%84AOP%E9%85%8D%E7%BD%AE%0A%60%60%60java%0A%40Component(value%20%3D%20%22logger%22)%0A%40Aspect%2F%2F%E8%A1%A8%E7%A4%BA%E5%BD%93%E5%89%8D%E7%B1%BB%E6%98%AF%E4%B8%80%E4%B8%AA%E5%88%87%E9%9D%A2%E7%B1%BB%0Apublic%20class%20Logger%20%7B%0A%20%20%20%20%40Pointcut(value%20%3D%20%22execution(public%20void%20com.itheima.service.impl.AccountServiceImpl.saveAccount())%22)%0A%20%20%20%20private%20void%20pt1()%7B%7D%0A%20%20%20%20%2F**%0A%20%20%20%20%20*%20%E5%89%8D%E7%BD%AE%E9%80%9A%E7%9F%A5%0A%20%20%20%20%20*%2F%0A%20%20%20%20%40Before(value%20%3D%20%22pt1()%22)%0A%20%20%20%20public%20void%20beforePrintLog()%7B%0A%20%20%20%20%20%20%20%20System.out.println(%22%E5%89%8D%E7%BD%AE%E9%80%9A%E7%9F%A5Logger%E7%B1%BB%E4%B8%AD%E7%9A%84beforePrintLog%E6%96%B9%E6%B3%95%E5%BC%80%E5%A7%8B%E8%AE%B0%E5%BD%95%E6%97%A5%E5%BF%97%22)%3B%0A%20%20%20%20%7D%0A%20%20%20%20%2F**%0A%20%20%20%20%20*%20%E5%90%8E%E7%BD%AE%E9%80%9A%E7%9F%A5%0A%20%20%20%20%20*%2F%0A%20%20%20%20%40AfterReturning(value%20%3D%20%22pt1()%22)%0A%20%20%20%20public%20void%20afterReturningPrintLog()%7B%0A%20%20%20%20%20%20%20%20System.out.println(%22%E5%90%8E%E7%BD%AE%E9%80%9A%E7%9F%A5Logger%E7%B1%BB%E4%B8%AD%E7%9A%84afterReturningPrintLog%E6%96%B9%E6%B3%95%E5%BC%80%E5%A7%8B%E8%AE%B0%E5%BD%95%E6%97%A5%E5%BF%97%22)%3B%0A%20%20%20%20%7D%0A%20%20%20%20%2F**%0A%20%20%20%20%20*%20%E5%BC%82%E5%B8%B8%E9%80%9A%E7%9F%A5%0A%20%20%20%20%20*%2F%0A%20%20%20%20%40AfterThrowing(value%20%3D%20%22pt1()%22)%0A%20%20%20%20public%20void%20afterThrowingPrintLog()%7B%0A%20%20%20%20%20%20%20%20System.out.println(%22%E5%BC%82%E5%B8%B8%E9%80%9A%E7%9F%A5Logger%E7%B1%BB%E4%B8%AD%E7%9A%84afterThrowingPrintLog%E6%96%B9%E6%B3%95%E5%BC%80%E5%A7%8B%E8%AE%B0%E5%BD%95%E6%97%A5%E5%BF%97%22)%3B%0A%20%20%20%20%7D%0A%20%20%20%20%2F**%0A%20%20%20%20%20*%20%E6%9C%80%E7%BB%88%E9%80%9A%E7%9F%A5%0A%20%20%20%20%20*%2F%0A%20%20%20%20%40AfterReturning(value%20%3D%20%22pt1()%22)%0A%20%20%20%20public%20void%20afterPrintLog()%7B%0A%20%20%20%20%20%20%20%20System.out.println(%22%E6%9C%80%E7%BB%88%E9%80%9A%E7%9F%A5Logger%E7%B1%BB%E4%B8%AD%E7%9A%84afterPrintLog%E6%96%B9%E6%B3%95%E5%BC%80%E5%A7%8B%E8%AE%B0%E5%BD%95%E6%97%A5%E5%BF%97%22)%3B%0A%20%20%20%20%7D%0A%20%20%20%20%2F**%0A%20%20%20%20%20*%20%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%0A%20%20%20%20%20*%20%E9%97%AE%E9%A2%98%EF%BC%9A%0A%20%20%20%20%20*%20%20%20%20%20%20%E5%BD%93%E9%85%8D%E7%BD%AE%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E5%90%8E%EF%BC%8C%E5%88%87%E5%85%A5%E7%82%B9%E6%96%B9%E6%B3%95%E6%B2%A1%E6%89%A7%E8%A1%8C%EF%BC%8C%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E6%89%A7%E8%A1%8C%E4%BA%86%0A%20%20%20%20%20*%20%E5%88%86%E6%9E%90%EF%BC%9A%0A%20%20%20%20%20*%20%20%20%20%20%20%E9%80%9A%E8%BF%87%E5%AF%B9%E6%AF%94%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%AD%E7%9A%84%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E4%BB%A3%E7%A0%81%EF%BC%8C%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E4%B8%AD%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E6%9C%89%E6%98%8E%E7%A1%AE%E7%9A%84%E5%88%87%E5%85%A5%E7%82%B9%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8%0A%20%20%20%20%20*%20%E8%A7%A3%E5%86%B3%EF%BC%9A%0A%20%20%20%20%20*%20%20%20%20%20%20spring%E6%A1%86%E6%9E%B6%E4%B8%BA%E6%88%91%E4%BB%AC%E6%8F%90%E4%BE%9B%E4%B8%80%E4%B8%AA%E6%8E%A5%E5%8F%A3%EF%BC%9AProceedingJoinPoint%E3%80%82%E8%AF%A5%E6%8E%A5%E5%8F%A3%E6%9C%89%E4%B8%80%E4%B8%AA%E6%96%B9%E6%B3%95proceed()%EF%BC%8C%E6%AD%A4%E6%96%B9%E6%B3%95%E5%B0%B1%E7%9B%B8%E5%BD%93%E4%BA%8E%E6%98%8E%E7%A1%AE%E8%B0%83%E7%94%A8%E5%88%87%E5%85%A5%E7%82%B9%E6%96%B9%E6%B3%95%E3%80%82%0A%20%20%20%20%20*%20%20%20%20%20%20%E8%AF%A5%E6%8E%A5%E5%8F%A3%E5%8F%AF%E4%BB%A5%E4%BD%9C%E4%B8%BA%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E7%9A%84%E6%96%B9%E6%B3%95%E5%8F%82%E6%95%B0%EF%BC%8C%E5%9C%A8%E7%A8%8B%E5%BA%8F%E6%89%A7%E8%A1%8C%E6%97%B6%EF%BC%8Cspring%E6%A1%86%E6%9E%B6%E4%BC%9A%E4%B8%BA%E6%88%91%E4%BB%AC%E6%8F%90%E4%BE%9B%E8%AF%A5%E6%8E%A5%E5%8F%A3%E7%9A%84%E5%AE%9E%E7%8E%B0%E7%B1%BB%E4%BE%9B%E6%88%91%E4%BB%AC%E4%BD%BF%E7%94%A8%0A%20%20%20%20%20*%20spring%E4%B8%AD%E7%9A%84%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%EF%BC%9A%0A%20%20%20%20%20*%20%20%20%20%20%20%E5%AE%83%E6%98%AFspring%E6%A1%86%E6%9E%B6%E4%B8%BA%E6%88%91%E4%BB%AC%E6%8F%90%E4%BE%9B%E7%9A%84%E4%B8%80%E7%A7%8D%E5%8F%AF%E4%BB%A5%E5%9C%A8%E4%BB%A3%E7%A0%81%E4%B8%AD%E6%89%8B%E5%8A%A8%E6%8E%A7%E5%88%B6%E5%A2%9E%E5%BC%BA%E6%96%B9%E6%B3%95%E4%BD%95%E6%97%B6%E6%89%A7%E8%A1%8C%E7%9A%84%E6%96%B9%E5%BC%8F%0A%20%20%20%20%20*%2F%0A%20%20%20%20%40Around(value%20%3D%20%22pt1()%22)%0A%20%20%20%20public%20Object%20aroundPrintLog(ProceedingJoinPoint%20proceedingJoinPoint)%7B%0A%20%20%20%20%20%20%20%20Object%20rtValue%20%3D%20null%3B%0A%20%20%20%20%20%20%20%20try%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20Object%5B%5D%20args%20%3D%20proceedingJoinPoint.getArgs()%3B%0A%20%20%20%20%20%20%20%20%20%20%20%20rtValue%20%3D%20proceedingJoinPoint.proceed(args)%3B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20rtValue%3B%0A%20%20%20%20%20%20%20%20%7D%20catch%20(Throwable%20throwable)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20throw%20new%20RuntimeException(throwable)%3B%0A%20%20%20%20%20%20%20%20%7Dfinally%20%7B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%7D%0A%7D%0A%60%60%60%0A**%E6%B3%A8%E6%84%8F**%0A%E4%BD%BF%E7%94%A8%E6%B3%A8%E8%A7%A3%E6%96%B9%E5%BC%8F%E5%AE%9E%E7%8E%B0AOP%E6%97%B6%EF%BC%8Cspring%E6%A1%86%E6%9E%B6%E7%9A%84%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F%E6%9C%89%E9%97%AE%E9%A2%98%0A%E6%AD%A4%E6%97%B6%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F%E6%98%AF%EF%BC%9A%E5%89%8D%E7%BD%AE%E9%80%9A%E7%9F%A5-%3E%E6%9C%80%E7%BB%88%E9%80%9A%E7%9F%A5-%3E%E5%90%8E%E7%BD%AE%E9%80%9A%E7%9F%A5-%3E%E5%BC%82%E5%B8%B8%E9%80%9A%E7%9F%A5%0A%E5%9B%A0%E6%AD%A4%EF%BC%9A%E4%BD%BF%E7%94%A8%E6%B3%A8%E8%A7%A3%E6%96%B9%E5%BC%8F%E5%AE%9E%E7%8E%B0AOP%E6%97%B6%EF%BC%8C%E5%BA%94%E4%BD%BF%E7%94%A8%E7%8E%AF%E7%BB%95%E9%80%9A%E7%9F%A5%E5%AE%9E%E7%8E%B0%0A%23%23%23%23%20%E4%BD%BF%E7%94%A8%E7%BA%AF%E6%B3%A8%E8%A7%A3%E6%96%B9%E5%BC%8F%E9%85%8D%E7%BD%AE%E6%89%93%E5%BC%80AOP%0A!%5B6750467e5af3ce1efe540507d58b2485.png%5D(en-resource%3A%2F%2Fdatabase%2F904%3A1)%0A%0A%0A%0A%0A%0A%0A%0A%0A%0A%0A</center></span>
+</div></body></html> 

@@ -1,0 +1,171 @@
+<html>
+<head>
+  <title>第三天：mybatis的深入和多表</title>
+  <basefont face="微软雅黑" size="2" />
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+  <meta name="exporter-version" content="YXBJ Windows/601535 (zh-CN, DDL); Windows/10.0.0 (Win64); EDAMVersion=V2;"/>
+  <meta name="content-class" content="yinxiang.markdown"/>
+  <style>
+    body, td {
+      font-family: 微软雅黑;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+<a name="1684"/>
+<h1>第三天：mybatis的深入和多表</h1>
+
+<div><span><div style="font-size: 14px; margin: 0; padding: 0; width: 100%;"><h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">mybatis的连接池</h4>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">连接池定义</h5>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">连接池就是用于存储连接的一个容器
+容器其实就是一个集合对象，该集合必须是线程安全的，不能两个线程拿到同一连接
+该集合还必须实现队列的特性：先进先出
+</code></pre>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">mybatis连接池</h5>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">mybatis连接池提供了三种方式的配置：
+配置位置：
+    主配置文件SqlMapConfig.xml中的dataSource标签，type属性就是表示采用何种连接池方式
+ type属性的取值：
+    POOlLED 采用传统的javax.sql.DataSource规范中的连接池，mybatis中有针对规范的实现
+    UNPOOLED 采用传统的获取连接的方式，虽然也实现了javax.sql.DataSource接口，但是并没有使用池的思想
+    JNDI 采用服务器提供的JNDI技术实现，来获取DataSource对象，不同的服务器所能拿到的DataSource是不一样的
+        注意：如果不是web或者maven的war工程，是不能使用的
+        我们实际开发中使用的是Tomcat服务器，采用的连接池就是dbcp连接池     
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：mybatis的深入和多表_files/无标题2.png" type="image/png" data-filename="无标题2.png"/></p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">mybatis的事务控制及设计的方法</h4>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">什么是事务？</h5>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">事务的四大特性ACID</h5>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">不考虑隔离性会产生的3个问题</h5>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">解决办法：</h5>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">mybatis基于XML配置的动态SQL语句使用</h4>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">mappers配置文件中的几个标签：
+&lt;if&gt;条件语句
+&lt;where&gt;自动添加&quot;1 = 1&quot;
+&lt;foreach&gt;传入条件参数为集合时，遍历该集合
+</code></pre>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：mybatis的深入和多表_files/Image.png" type="image/png" data-filename="Image.png"/></p>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">sql语句中“1=1”的作用：</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;">1.方便编写条件语句<br/>
+2.防止报错<br/>
+副作用：<br/>
+添加了“1=1”的过滤条件以后数据库系统就<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">无法使用索引等查询优化策略，数据库系统将会被迫对每行数据进行扫描（也就是全表扫描）以比较此行是否满足过滤条件</strong>，当表中数据量比较大的时候查询速度会非常慢</p>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">mybatis的多表查询</h4>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;">表之间的关系有多种：<br/>
+一对多<br/>
+多对一<br/>
+一对一<br/>
+多对多<br/>
+Mybatis将多对一看成一对一</p>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">mybatis多表查询一对一（一对多）示例</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;">用户和账户：<br/>
+一个用户可以有多个账户<br/>
+一个账户只能属于一个用户（多个账户也可以属于一个用户）<br/>
+步骤：<br/>
+1.建立两张表：用户表、账户表<br/>
+让用户表和账户表之间具备一对多的关系：需要使用外键在账户表中添加<br/>
+2.建立两个实体类：用户实体类和账户实体类<br/>
+让用户和账户的实体类能体现出来一对多的关系<br/>
+3.建立两个配置文件<br/>
+用户的配置文件<br/>
+账户的配置文件<br/>
+4.实现配置：<br/>
+当我们查询用户时，可以同时得到用户下所包含的账户信息<br/>
+当我们查询账户时，可以同时得到账户的所属用户信息<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">一对一实现的两种方式</strong><br/>
+1.继承主表实体类，将从表的信息加入<br/>
+<img src="第三天：mybatis的深入和多表_files/Image [1].png" type="image/png" data-filename="Image.png"/><br/>
+2.将从表实体类作为主表实体类的域，使用resultMap将结果插入<br/>
+<img src="第三天：mybatis的深入和多表_files/Image [2].png" type="image/png" data-filename="Image.png"/><br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">一对多实现的方式</strong><br/>
+将从表实体类列表作为主表实体类的域，使用resultMap将结果插入<br/>
+<img src="第三天：mybatis的深入和多表_files/Image [3].png" type="image/png" data-filename="Image.png"/></p>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">mybatis多表查询多对多示例</h5>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;">用户和角色：<br/>
+一个用户可以有多个角色<br/>
+一个角色可以赋予多个用户<br/>
+步骤：<br/>
+1.建立两张表：用户表、角色表<br/>
+让用户表和角色表具有多对多的关系。需要使用中间表，中间表中包含各种各自的主键，在中间表中是外键。<br/>
+2.建立两个实体类：用户实体类和角色实体类<br/>
+让用户和角色的实体类能体现出来多对多的关系<br/>
+各自包含对方一个集合引用<br/>
+3.建立两个配置文件<br/>
+用户的配置文件<br/>
+角色的配置文件<br/>
+4.实现配置<br/>
+当我们查询用户时，可以同时得到用户所包含的角色信息<br/>
+当我们查询角色时，可以同时得到角色所赋予的用户信息<br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">多对多的解决：</strong><br/>
+利用中间表，将多对多转换为两个一对多<br/>
+sql语句变化，代码部分与一对多类似</p>
+<hr style="line-height: 160%; box-sizing: content-box; border-top: 1px solid #eee; margin: 16px 0;"/>
+<h4 style="line-height: 160%; box-sizing: content-box; font-size: 20px; color: #333;">JNDI</h4>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：mybatis的深入和多表_files/JNDI.png" type="image/png" data-filename="JNDI.png"/></p>
+<h5 style="line-height: 160%; box-sizing: content-box; font-weight: 700; font-size: 16px; color: #333;">步骤：</h5>
+<h6 style="line-height: 160%; box-sizing: content-box; font-size: 13px; color: #333;">1.1创建maven的war工程</h6>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：mybatis的深入和多表_files/Image [4].png" type="image/png" data-filename="Image.png"/><br/>
+<img src="第三天：mybatis的深入和多表_files/Image [5].png" type="image/png" data-filename="Image.png"/></p>
+<h6 style="line-height: 160%; box-sizing: content-box; font-size: 13px; color: #333;">1.2导入pom坐标</h6>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">&lt;dependencies&gt;  
+    &lt;dependency&gt;    
+        &lt;groupId&gt;org.mybatis&lt;/groupId&gt;    
+        &lt;artifactId&gt;mybatis&lt;/artifactId&gt;    
+        &lt;version&gt;3.5.1&lt;/version&gt;  
+    &lt;/dependency&gt;  
+    &lt;dependency&gt;    
+        &lt;groupId&gt;mysql&lt;/groupId&gt;    
+        &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt;    
+        &lt;version&gt;5.1.47&lt;/version&gt;  
+    &lt;/dependency&gt;  
+    &lt;dependency&gt;    
+        &lt;groupId&gt;log4j&lt;/groupId&gt;    
+        &lt;artifactId&gt;log4j&lt;/artifactId&gt;    
+        &lt;version&gt;1.2.17&lt;/version&gt;  
+    &lt;/dependency&gt;  
+    &lt;dependency&gt;    
+        &lt;groupId&gt;junit&lt;/groupId&gt;    
+        &lt;artifactId&gt;junit&lt;/artifactId&gt;    
+        &lt;version&gt;4.13-beta-2&lt;/version&gt;  
+    &lt;/dependency&gt;  
+    &lt;dependency&gt;    
+        &lt;groupId&gt;javax.servlet&lt;/groupId&gt;    
+        &lt;artifactId&gt;servlet-api&lt;/artifactId&gt;    
+        &lt;version&gt;2.5&lt;/version&gt;  
+    &lt;/dependency&gt;  
+    &lt;dependency&gt;    
+      &lt;groupId&gt;javax.servlet.jsp&lt;/groupId&gt;   
+      &lt;artifactId&gt;jsp-api&lt;/artifactId&gt;    
+      &lt;version&gt;2.2&lt;/version&gt; 
+      &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+</code></pre>
+<h6 style="line-height: 160%; box-sizing: content-box; font-size: 13px; color: #333;">1.3在webapp文件夹下创建WETA-INF目录，添加数据源配置</h6>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：mybatis的深入和多表_files/Image [6].png" type="image/png" data-filename="Image.png"/></p>
+<pre style="line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; margin: 2px 0 8px; background-color: #f5f7f8;"><code style="display: block; overflow-x: auto; background: #1e1e1e; line-height: 160%; box-sizing: content-box; border: 0; border-radius: 0; letter-spacing: -.3px; padding: 18px; color: #f4f4f4; white-space: pre-wrap;">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;Context&gt;
+&lt;!-- 
+&lt;Resource name=&quot;jdbc/eesy_mybatis&quot;                             数据源的名称type=&quot;javax.sql.DataSource&quot;                          数据源类型auth=&quot;Container&quot;                                     数据源提供者maxActive=&quot;20&quot;                                       最大活动数maxWait=&quot;10000&quot;                                           最大等待时间maxIdle=&quot;5&quot;                                               最大空闲数username=&quot;root&quot;                                           用户名password=&quot;1234&quot;                                           密码driverClassName=&quot;com.mysql.jdbc.Driver&quot;              驱动类url=&quot;jdbc:mysql://localhost:3306/eesy_mybatis&quot;  连接url字符串/&gt;
+--&gt;
+&lt;Resource name=&quot;jdbc/db1&quot;
+type=&quot;javax.sql.DataSource&quot;
+auth=&quot;Container&quot;
+maxActive=&quot;20&quot;
+maxWait=&quot;10000&quot;
+maxIdle=&quot;5&quot;
+username=&quot;root&quot;
+password=&quot;1234&quot;
+driverClassName=&quot;com.mysql.jdbc.Driver&quot;
+url=&quot;jdbc:mysql://localhost:3306/db1&quot;
+/&gt;
+&lt;/Context&gt;
+</code></pre>
+<h6 style="line-height: 160%; box-sizing: content-box; font-size: 13px; color: #333;">1.6修改SqlMapConfig.xml配置</h6>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：mybatis的深入和多表_files/Image [7].png" type="image/png" data-filename="Image.png"/></p>
+<h6 style="line-height: 160%; box-sizing: content-box; font-size: 13px; color: #333;">1.7使用JNDI连接数据库</h6>
+<p style="line-height: 160%; box-sizing: content-box; margin: 10px 0; color: #333;"><img src="第三天：mybatis的深入和多表_files/Image [8].png" type="image/png" data-filename="Image.png"/><br/>
+<strong style="line-height: 160%; box-sizing: content-box; font-weight: 700;">注意：</strong><br/>
+连接数据库的部分得写在jsp中，此处test中代码是无效的，因为test运行未经过tomcat</p>
+</div><center style="display:none !important;visibility:collapse !important;height:0 !important;white-space:nowrap;width:100%;overflow:hidden">%23%23%23%23%20mybatis%E7%9A%84%E8%BF%9E%E6%8E%A5%E6%B1%A0%0A%23%23%23%23%23%20%E8%BF%9E%E6%8E%A5%E6%B1%A0%E5%AE%9A%E4%B9%89%0A%60%60%60%0A%E8%BF%9E%E6%8E%A5%E6%B1%A0%E5%B0%B1%E6%98%AF%E7%94%A8%E4%BA%8E%E5%AD%98%E5%82%A8%E8%BF%9E%E6%8E%A5%E7%9A%84%E4%B8%80%E4%B8%AA%E5%AE%B9%E5%99%A8%0A%E5%AE%B9%E5%99%A8%E5%85%B6%E5%AE%9E%E5%B0%B1%E6%98%AF%E4%B8%80%E4%B8%AA%E9%9B%86%E5%90%88%E5%AF%B9%E8%B1%A1%EF%BC%8C%E8%AF%A5%E9%9B%86%E5%90%88%E5%BF%85%E9%A1%BB%E6%98%AF%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8%E7%9A%84%EF%BC%8C%E4%B8%8D%E8%83%BD%E4%B8%A4%E4%B8%AA%E7%BA%BF%E7%A8%8B%E6%8B%BF%E5%88%B0%E5%90%8C%E4%B8%80%E8%BF%9E%E6%8E%A5%0A%E8%AF%A5%E9%9B%86%E5%90%88%E8%BF%98%E5%BF%85%E9%A1%BB%E5%AE%9E%E7%8E%B0%E9%98%9F%E5%88%97%E7%9A%84%E7%89%B9%E6%80%A7%EF%BC%9A%E5%85%88%E8%BF%9B%E5%85%88%E5%87%BA%0A%60%60%60%0A%23%23%23%23%23%20mybatis%E8%BF%9E%E6%8E%A5%E6%B1%A0%0A%60%60%60%0Amybatis%E8%BF%9E%E6%8E%A5%E6%B1%A0%E6%8F%90%E4%BE%9B%E4%BA%86%E4%B8%89%E7%A7%8D%E6%96%B9%E5%BC%8F%E7%9A%84%E9%85%8D%E7%BD%AE%EF%BC%9A%0A%E9%85%8D%E7%BD%AE%E4%BD%8D%E7%BD%AE%EF%BC%9A%0A%20%20%20%20%E4%B8%BB%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6SqlMapConfig.xml%E4%B8%AD%E7%9A%84dataSource%E6%A0%87%E7%AD%BE%EF%BC%8Ctype%E5%B1%9E%E6%80%A7%E5%B0%B1%E6%98%AF%E8%A1%A8%E7%A4%BA%E9%87%87%E7%94%A8%E4%BD%95%E7%A7%8D%E8%BF%9E%E6%8E%A5%E6%B1%A0%E6%96%B9%E5%BC%8F%0A%20type%E5%B1%9E%E6%80%A7%E7%9A%84%E5%8F%96%E5%80%BC%EF%BC%9A%0A%20%20%20%20POOlLED%20%E9%87%87%E7%94%A8%E4%BC%A0%E7%BB%9F%E7%9A%84javax.sql.DataSource%E8%A7%84%E8%8C%83%E4%B8%AD%E7%9A%84%E8%BF%9E%E6%8E%A5%E6%B1%A0%EF%BC%8Cmybatis%E4%B8%AD%E6%9C%89%E9%92%88%E5%AF%B9%E8%A7%84%E8%8C%83%E7%9A%84%E5%AE%9E%E7%8E%B0%0A%20%20%20%20UNPOOLED%20%E9%87%87%E7%94%A8%E4%BC%A0%E7%BB%9F%E7%9A%84%E8%8E%B7%E5%8F%96%E8%BF%9E%E6%8E%A5%E7%9A%84%E6%96%B9%E5%BC%8F%EF%BC%8C%E8%99%BD%E7%84%B6%E4%B9%9F%E5%AE%9E%E7%8E%B0%E4%BA%86javax.sql.DataSource%E6%8E%A5%E5%8F%A3%EF%BC%8C%E4%BD%86%E6%98%AF%E5%B9%B6%E6%B2%A1%E6%9C%89%E4%BD%BF%E7%94%A8%E6%B1%A0%E7%9A%84%E6%80%9D%E6%83%B3%0A%20%20%20%20JNDI%20%E9%87%87%E7%94%A8%E6%9C%8D%E5%8A%A1%E5%99%A8%E6%8F%90%E4%BE%9B%E7%9A%84JNDI%E6%8A%80%E6%9C%AF%E5%AE%9E%E7%8E%B0%EF%BC%8C%E6%9D%A5%E8%8E%B7%E5%8F%96DataSource%E5%AF%B9%E8%B1%A1%EF%BC%8C%E4%B8%8D%E5%90%8C%E7%9A%84%E6%9C%8D%E5%8A%A1%E5%99%A8%E6%89%80%E8%83%BD%E6%8B%BF%E5%88%B0%E7%9A%84DataSource%E6%98%AF%E4%B8%8D%E4%B8%80%E6%A0%B7%E7%9A%84%0A%20%20%20%20%20%20%20%20%E6%B3%A8%E6%84%8F%EF%BC%9A%E5%A6%82%E6%9E%9C%E4%B8%8D%E6%98%AFweb%E6%88%96%E8%80%85maven%E7%9A%84war%E5%B7%A5%E7%A8%8B%EF%BC%8C%E6%98%AF%E4%B8%8D%E8%83%BD%E4%BD%BF%E7%94%A8%E7%9A%84%0A%20%20%20%20%20%20%20%20%E6%88%91%E4%BB%AC%E5%AE%9E%E9%99%85%E5%BC%80%E5%8F%91%E4%B8%AD%E4%BD%BF%E7%94%A8%E7%9A%84%E6%98%AFTomcat%E6%9C%8D%E5%8A%A1%E5%99%A8%EF%BC%8C%E9%87%87%E7%94%A8%E7%9A%84%E8%BF%9E%E6%8E%A5%E6%B1%A0%E5%B0%B1%E6%98%AFdbcp%E8%BF%9E%E6%8E%A5%E6%B1%A0%20%20%20%20%20%0A%60%60%60%0A!%5B9c6cfbc4c14a1267e43c2038e61aaf19.png%5D(en-resource%3A%2F%2Fdatabase%2F4034%3A1)%0A%23%23%23%23%20mybatis%E7%9A%84%E4%BA%8B%E5%8A%A1%E6%8E%A7%E5%88%B6%E5%8F%8A%E8%AE%BE%E8%AE%A1%E7%9A%84%E6%96%B9%E6%B3%95%0A%23%23%23%23%23%20%E4%BB%80%E4%B9%88%E6%98%AF%E4%BA%8B%E5%8A%A1%EF%BC%9F%0A%23%23%23%23%23%20%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%9B%9B%E5%A4%A7%E7%89%B9%E6%80%A7ACID%0A%23%23%23%23%23%20%E4%B8%8D%E8%80%83%E8%99%91%E9%9A%94%E7%A6%BB%E6%80%A7%E4%BC%9A%E4%BA%A7%E7%94%9F%E7%9A%843%E4%B8%AA%E9%97%AE%E9%A2%98%0A%23%23%23%23%23%20%E8%A7%A3%E5%86%B3%E5%8A%9E%E6%B3%95%EF%BC%9A%0A%23%23%23%23%20mybatis%E5%9F%BA%E4%BA%8EXML%E9%85%8D%E7%BD%AE%E7%9A%84%E5%8A%A8%E6%80%81SQL%E8%AF%AD%E5%8F%A5%E4%BD%BF%E7%94%A8%0A%60%60%60%0Amappers%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E4%B8%AD%E7%9A%84%E5%87%A0%E4%B8%AA%E6%A0%87%E7%AD%BE%EF%BC%9A%0A%3Cif%3E%E6%9D%A1%E4%BB%B6%E8%AF%AD%E5%8F%A5%0A%3Cwhere%3E%E8%87%AA%E5%8A%A8%E6%B7%BB%E5%8A%A0%221%20%3D%201%22%0A%3Cforeach%3E%E4%BC%A0%E5%85%A5%E6%9D%A1%E4%BB%B6%E5%8F%82%E6%95%B0%E4%B8%BA%E9%9B%86%E5%90%88%E6%97%B6%EF%BC%8C%E9%81%8D%E5%8E%86%E8%AF%A5%E9%9B%86%E5%90%88%0A%60%60%60%0A!%5B8ccb24308094986d2cd53f2d253e919e.png%5D(en-resource%3A%2F%2Fdatabase%2F4044%3A1)%0A%23%23%23%23%23%20sql%E8%AF%AD%E5%8F%A5%E4%B8%AD%E2%80%9C1%3D1%E2%80%9D%E7%9A%84%E4%BD%9C%E7%94%A8%EF%BC%9A%0A1.%E6%96%B9%E4%BE%BF%E7%BC%96%E5%86%99%E6%9D%A1%E4%BB%B6%E8%AF%AD%E5%8F%A5%0A2.%E9%98%B2%E6%AD%A2%E6%8A%A5%E9%94%99%0A%E5%89%AF%E4%BD%9C%E7%94%A8%EF%BC%9A%0A%E6%B7%BB%E5%8A%A0%E4%BA%86%E2%80%9C1%3D1%E2%80%9D%E7%9A%84%E8%BF%87%E6%BB%A4%E6%9D%A1%E4%BB%B6%E4%BB%A5%E5%90%8E%E6%95%B0%E6%8D%AE%E5%BA%93%E7%B3%BB%E7%BB%9F%E5%B0%B1**%E6%97%A0%E6%B3%95%E4%BD%BF%E7%94%A8%E7%B4%A2%E5%BC%95%E7%AD%89%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5%EF%BC%8C%E6%95%B0%E6%8D%AE%E5%BA%93%E7%B3%BB%E7%BB%9F%E5%B0%86%E4%BC%9A%E8%A2%AB%E8%BF%AB%E5%AF%B9%E6%AF%8F%E8%A1%8C%E6%95%B0%E6%8D%AE%E8%BF%9B%E8%A1%8C%E6%89%AB%E6%8F%8F%EF%BC%88%E4%B9%9F%E5%B0%B1%E6%98%AF%E5%85%A8%E8%A1%A8%E6%89%AB%E6%8F%8F%EF%BC%89%E4%BB%A5%E6%AF%94%E8%BE%83%E6%AD%A4%E8%A1%8C%E6%98%AF%E5%90%A6%E6%BB%A1%E8%B6%B3%E8%BF%87%E6%BB%A4%E6%9D%A1%E4%BB%B6**%EF%BC%8C%E5%BD%93%E8%A1%A8%E4%B8%AD%E6%95%B0%E6%8D%AE%E9%87%8F%E6%AF%94%E8%BE%83%E5%A4%A7%E7%9A%84%E6%97%B6%E5%80%99%E6%9F%A5%E8%AF%A2%E9%80%9F%E5%BA%A6%E4%BC%9A%E9%9D%9E%E5%B8%B8%E6%85%A2%0A%23%23%23%23%20mybatis%E7%9A%84%E5%A4%9A%E8%A1%A8%E6%9F%A5%E8%AF%A2%0A%E8%A1%A8%E4%B9%8B%E9%97%B4%E7%9A%84%E5%85%B3%E7%B3%BB%E6%9C%89%E5%A4%9A%E7%A7%8D%EF%BC%9A%0A%E4%B8%80%E5%AF%B9%E5%A4%9A%0A%E5%A4%9A%E5%AF%B9%E4%B8%80%0A%E4%B8%80%E5%AF%B9%E4%B8%80%0A%E5%A4%9A%E5%AF%B9%E5%A4%9A%0AMybatis%E5%B0%86%E5%A4%9A%E5%AF%B9%E4%B8%80%E7%9C%8B%E6%88%90%E4%B8%80%E5%AF%B9%E4%B8%80%0A%23%23%23%23%23%20mybatis%E5%A4%9A%E8%A1%A8%E6%9F%A5%E8%AF%A2%E4%B8%80%E5%AF%B9%E4%B8%80%EF%BC%88%E4%B8%80%E5%AF%B9%E5%A4%9A%EF%BC%89%E7%A4%BA%E4%BE%8B%0A%E7%94%A8%E6%88%B7%E5%92%8C%E8%B4%A6%E6%88%B7%EF%BC%9A%0A%E4%B8%80%E4%B8%AA%E7%94%A8%E6%88%B7%E5%8F%AF%E4%BB%A5%E6%9C%89%E5%A4%9A%E4%B8%AA%E8%B4%A6%E6%88%B7%0A%E4%B8%80%E4%B8%AA%E8%B4%A6%E6%88%B7%E5%8F%AA%E8%83%BD%E5%B1%9E%E4%BA%8E%E4%B8%80%E4%B8%AA%E7%94%A8%E6%88%B7%EF%BC%88%E5%A4%9A%E4%B8%AA%E8%B4%A6%E6%88%B7%E4%B9%9F%E5%8F%AF%E4%BB%A5%E5%B1%9E%E4%BA%8E%E4%B8%80%E4%B8%AA%E7%94%A8%E6%88%B7%EF%BC%89%0A%E6%AD%A5%E9%AA%A4%EF%BC%9A%0A1.%E5%BB%BA%E7%AB%8B%E4%B8%A4%E5%BC%A0%E8%A1%A8%EF%BC%9A%E7%94%A8%E6%88%B7%E8%A1%A8%E3%80%81%E8%B4%A6%E6%88%B7%E8%A1%A8%0A%20%20%20%20%E8%AE%A9%E7%94%A8%E6%88%B7%E8%A1%A8%E5%92%8C%E8%B4%A6%E6%88%B7%E8%A1%A8%E4%B9%8B%E9%97%B4%E5%85%B7%E5%A4%87%E4%B8%80%E5%AF%B9%E5%A4%9A%E7%9A%84%E5%85%B3%E7%B3%BB%EF%BC%9A%E9%9C%80%E8%A6%81%E4%BD%BF%E7%94%A8%E5%A4%96%E9%94%AE%E5%9C%A8%E8%B4%A6%E6%88%B7%E8%A1%A8%E4%B8%AD%E6%B7%BB%E5%8A%A0%0A2.%E5%BB%BA%E7%AB%8B%E4%B8%A4%E4%B8%AA%E5%AE%9E%E4%BD%93%E7%B1%BB%EF%BC%9A%E7%94%A8%E6%88%B7%E5%AE%9E%E4%BD%93%E7%B1%BB%E5%92%8C%E8%B4%A6%E6%88%B7%E5%AE%9E%E4%BD%93%E7%B1%BB%0A%20%20%20%20%E8%AE%A9%E7%94%A8%E6%88%B7%E5%92%8C%E8%B4%A6%E6%88%B7%E7%9A%84%E5%AE%9E%E4%BD%93%E7%B1%BB%E8%83%BD%E4%BD%93%E7%8E%B0%E5%87%BA%E6%9D%A5%E4%B8%80%E5%AF%B9%E5%A4%9A%E7%9A%84%E5%85%B3%E7%B3%BB%0A3.%E5%BB%BA%E7%AB%8B%E4%B8%A4%E4%B8%AA%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%0A%20%20%20%20%E7%94%A8%E6%88%B7%E7%9A%84%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%0A%20%20%20%20%E8%B4%A6%E6%88%B7%E7%9A%84%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%0A4.%E5%AE%9E%E7%8E%B0%E9%85%8D%E7%BD%AE%EF%BC%9A%0A%20%20%20%20%E5%BD%93%E6%88%91%E4%BB%AC%E6%9F%A5%E8%AF%A2%E7%94%A8%E6%88%B7%E6%97%B6%EF%BC%8C%E5%8F%AF%E4%BB%A5%E5%90%8C%E6%97%B6%E5%BE%97%E5%88%B0%E7%94%A8%E6%88%B7%E4%B8%8B%E6%89%80%E5%8C%85%E5%90%AB%E7%9A%84%E8%B4%A6%E6%88%B7%E4%BF%A1%E6%81%AF%0A%20%20%20%20%E5%BD%93%E6%88%91%E4%BB%AC%E6%9F%A5%E8%AF%A2%E8%B4%A6%E6%88%B7%E6%97%B6%EF%BC%8C%E5%8F%AF%E4%BB%A5%E5%90%8C%E6%97%B6%E5%BE%97%E5%88%B0%E8%B4%A6%E6%88%B7%E7%9A%84%E6%89%80%E5%B1%9E%E7%94%A8%E6%88%B7%E4%BF%A1%E6%81%AF%0A**%E4%B8%80%E5%AF%B9%E4%B8%80%E5%AE%9E%E7%8E%B0%E7%9A%84%E4%B8%A4%E7%A7%8D%E6%96%B9%E5%BC%8F**%20%20%20%20%0A1.%E7%BB%A7%E6%89%BF%E4%B8%BB%E8%A1%A8%E5%AE%9E%E4%BD%93%E7%B1%BB%EF%BC%8C%E5%B0%86%E4%BB%8E%E8%A1%A8%E7%9A%84%E4%BF%A1%E6%81%AF%E5%8A%A0%E5%85%A5%0A!%5B906f544ed38ba4193bf48ae0eb59d768.png%5D(en-resource%3A%2F%2Fdatabase%2F4180%3A1)%0A2.%E5%B0%86%E4%BB%8E%E8%A1%A8%E5%AE%9E%E4%BD%93%E7%B1%BB%E4%BD%9C%E4%B8%BA%E4%B8%BB%E8%A1%A8%E5%AE%9E%E4%BD%93%E7%B1%BB%E7%9A%84%E5%9F%9F%EF%BC%8C%E4%BD%BF%E7%94%A8resultMap%E5%B0%86%E7%BB%93%E6%9E%9C%E6%8F%92%E5%85%A5%0A!%5Bf098254030400f01191b7bacf6f5b918.png%5D(en-resource%3A%2F%2Fdatabase%2F4184%3A1)%0A**%E4%B8%80%E5%AF%B9%E5%A4%9A%E5%AE%9E%E7%8E%B0%E7%9A%84%E6%96%B9%E5%BC%8F**%0A%E5%B0%86%E4%BB%8E%E8%A1%A8%E5%AE%9E%E4%BD%93%E7%B1%BB%E5%88%97%E8%A1%A8%E4%BD%9C%E4%B8%BA%E4%B8%BB%E8%A1%A8%E5%AE%9E%E4%BD%93%E7%B1%BB%E7%9A%84%E5%9F%9F%EF%BC%8C%E4%BD%BF%E7%94%A8resultMap%E5%B0%86%E7%BB%93%E6%9E%9C%E6%8F%92%E5%85%A5%0A!%5Bff64fe5b72708cc811f45c853617cb8e.png%5D(en-resource%3A%2F%2Fdatabase%2F4186%3A1)%0A%23%23%23%23%23%20mybatis%E5%A4%9A%E8%A1%A8%E6%9F%A5%E8%AF%A2%E5%A4%9A%E5%AF%B9%E5%A4%9A%E7%A4%BA%E4%BE%8B%0A%E7%94%A8%E6%88%B7%E5%92%8C%E8%A7%92%E8%89%B2%EF%BC%9A%0A%E4%B8%80%E4%B8%AA%E7%94%A8%E6%88%B7%E5%8F%AF%E4%BB%A5%E6%9C%89%E5%A4%9A%E4%B8%AA%E8%A7%92%E8%89%B2%0A%E4%B8%80%E4%B8%AA%E8%A7%92%E8%89%B2%E5%8F%AF%E4%BB%A5%E8%B5%8B%E4%BA%88%E5%A4%9A%E4%B8%AA%E7%94%A8%E6%88%B7%0A%E6%AD%A5%E9%AA%A4%EF%BC%9A%0A1.%E5%BB%BA%E7%AB%8B%E4%B8%A4%E5%BC%A0%E8%A1%A8%EF%BC%9A%E7%94%A8%E6%88%B7%E8%A1%A8%E3%80%81%E8%A7%92%E8%89%B2%E8%A1%A8%0A%20%20%20%20%E8%AE%A9%E7%94%A8%E6%88%B7%E8%A1%A8%E5%92%8C%E8%A7%92%E8%89%B2%E8%A1%A8%E5%85%B7%E6%9C%89%E5%A4%9A%E5%AF%B9%E5%A4%9A%E7%9A%84%E5%85%B3%E7%B3%BB%E3%80%82%E9%9C%80%E8%A6%81%E4%BD%BF%E7%94%A8%E4%B8%AD%E9%97%B4%E8%A1%A8%EF%BC%8C%E4%B8%AD%E9%97%B4%E8%A1%A8%E4%B8%AD%E5%8C%85%E5%90%AB%E5%90%84%E7%A7%8D%E5%90%84%E8%87%AA%E7%9A%84%E4%B8%BB%E9%94%AE%EF%BC%8C%E5%9C%A8%E4%B8%AD%E9%97%B4%E8%A1%A8%E4%B8%AD%E6%98%AF%E5%A4%96%E9%94%AE%E3%80%82%0A2.%E5%BB%BA%E7%AB%8B%E4%B8%A4%E4%B8%AA%E5%AE%9E%E4%BD%93%E7%B1%BB%EF%BC%9A%E7%94%A8%E6%88%B7%E5%AE%9E%E4%BD%93%E7%B1%BB%E5%92%8C%E8%A7%92%E8%89%B2%E5%AE%9E%E4%BD%93%E7%B1%BB%0A%20%20%20%20%E8%AE%A9%E7%94%A8%E6%88%B7%E5%92%8C%E8%A7%92%E8%89%B2%E7%9A%84%E5%AE%9E%E4%BD%93%E7%B1%BB%E8%83%BD%E4%BD%93%E7%8E%B0%E5%87%BA%E6%9D%A5%E5%A4%9A%E5%AF%B9%E5%A4%9A%E7%9A%84%E5%85%B3%E7%B3%BB%0A%20%20%20%20%E5%90%84%E8%87%AA%E5%8C%85%E5%90%AB%E5%AF%B9%E6%96%B9%E4%B8%80%E4%B8%AA%E9%9B%86%E5%90%88%E5%BC%95%E7%94%A8%0A3.%E5%BB%BA%E7%AB%8B%E4%B8%A4%E4%B8%AA%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%0A%20%20%20%20%E7%94%A8%E6%88%B7%E7%9A%84%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%0A%20%20%20%20%E8%A7%92%E8%89%B2%E7%9A%84%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%0A4.%E5%AE%9E%E7%8E%B0%E9%85%8D%E7%BD%AE%0A%20%20%20%20%E5%BD%93%E6%88%91%E4%BB%AC%E6%9F%A5%E8%AF%A2%E7%94%A8%E6%88%B7%E6%97%B6%EF%BC%8C%E5%8F%AF%E4%BB%A5%E5%90%8C%E6%97%B6%E5%BE%97%E5%88%B0%E7%94%A8%E6%88%B7%E6%89%80%E5%8C%85%E5%90%AB%E7%9A%84%E8%A7%92%E8%89%B2%E4%BF%A1%E6%81%AF%0A%20%20%20%20%E5%BD%93%E6%88%91%E4%BB%AC%E6%9F%A5%E8%AF%A2%E8%A7%92%E8%89%B2%E6%97%B6%EF%BC%8C%E5%8F%AF%E4%BB%A5%E5%90%8C%E6%97%B6%E5%BE%97%E5%88%B0%E8%A7%92%E8%89%B2%E6%89%80%E8%B5%8B%E4%BA%88%E7%9A%84%E7%94%A8%E6%88%B7%E4%BF%A1%E6%81%AF%0A**%E5%A4%9A%E5%AF%B9%E5%A4%9A%E7%9A%84%E8%A7%A3%E5%86%B3%EF%BC%9A**%0A%E5%88%A9%E7%94%A8%E4%B8%AD%E9%97%B4%E8%A1%A8%EF%BC%8C%E5%B0%86%E5%A4%9A%E5%AF%B9%E5%A4%9A%E8%BD%AC%E6%8D%A2%E4%B8%BA%E4%B8%A4%E4%B8%AA%E4%B8%80%E5%AF%B9%E5%A4%9A%0Asql%E8%AF%AD%E5%8F%A5%E5%8F%98%E5%8C%96%EF%BC%8C%E4%BB%A3%E7%A0%81%E9%83%A8%E5%88%86%E4%B8%8E%E4%B8%80%E5%AF%B9%E5%A4%9A%E7%B1%BB%E4%BC%BC%0A%0A*%20*%20*%0A%23%23%23%23%20JNDI%0A!%5B50595f377c80b676da188a2a90232e9f.png%5D(en-resource%3A%2F%2Fdatabase%2F4198%3A1)%0A%23%23%23%23%23%20%E6%AD%A5%E9%AA%A4%EF%BC%9A%0A%23%23%23%23%23%23%201.1%E5%88%9B%E5%BB%BAmaven%E7%9A%84war%E5%B7%A5%E7%A8%8B%0A!%5B76abd055ac9eb10e8d1b8566de7e4637.png%5D(en-resource%3A%2F%2Fdatabase%2F4233%3A1)%0A!%5B3e8c810c09ad5b335d2b916a9a414a48.png%5D(en-resource%3A%2F%2Fdatabase%2F4235%3A1)%0A%23%23%23%23%23%23%201.2%E5%AF%BC%E5%85%A5pom%E5%9D%90%E6%A0%87%0A%60%60%60%0A%3Cdependencies%3E%C2%A0%20%0A%20%20%20%20%3Cdependency%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CgroupId%3Eorg.mybatis%3C%2FgroupId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CartifactId%3Emybatis%3C%2FartifactId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3Cversion%3E3.5.1%3C%2Fversion%3E%C2%A0%20%0A%20%20%20%20%3C%2Fdependency%3E%C2%A0%20%0A%20%20%20%20%3Cdependency%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CgroupId%3Emysql%3C%2FgroupId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CartifactId%3Emysql-connector-java%3C%2FartifactId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3Cversion%3E5.1.47%3C%2Fversion%3E%C2%A0%20%0A%20%20%20%20%3C%2Fdependency%3E%C2%A0%20%0A%20%20%20%20%3Cdependency%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CgroupId%3Elog4j%3C%2FgroupId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CartifactId%3Elog4j%3C%2FartifactId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3Cversion%3E1.2.17%3C%2Fversion%3E%C2%A0%20%0A%20%20%20%20%3C%2Fdependency%3E%C2%A0%20%0A%20%20%20%20%3Cdependency%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CgroupId%3Ejunit%3C%2FgroupId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CartifactId%3Ejunit%3C%2FartifactId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3Cversion%3E4.13-beta-2%3C%2Fversion%3E%C2%A0%20%0A%20%20%20%20%3C%2Fdependency%3E%C2%A0%20%0A%20%20%20%20%3Cdependency%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CgroupId%3Ejavax.servlet%3C%2FgroupId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3CartifactId%3Eservlet-api%3C%2FartifactId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%20%20%3Cversion%3E2.5%3C%2Fversion%3E%C2%A0%20%0A%20%20%20%20%3C%2Fdependency%3E%C2%A0%20%0A%20%20%20%20%3Cdependency%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%3CgroupId%3Ejavax.servlet.jsp%3C%2FgroupId%3E%C2%A0%C2%A0%C2%A0%0A%20%20%20%20%20%20%3CartifactId%3Ejsp-api%3C%2FartifactId%3E%C2%A0%C2%A0%C2%A0%20%0A%20%20%20%20%20%20%3Cversion%3E2.2%3C%2Fversion%3E%C2%A0%0A%20%20%20%20%20%20%3C%2Fdependency%3E%0A%20%20%3C%2Fdependencies%3E%0A%60%60%60%0A%23%23%23%23%23%23%201.3%E5%9C%A8webapp%E6%96%87%E4%BB%B6%E5%A4%B9%E4%B8%8B%E5%88%9B%E5%BB%BAWETA-INF%E7%9B%AE%E5%BD%95%EF%BC%8C%E6%B7%BB%E5%8A%A0%E6%95%B0%E6%8D%AE%E6%BA%90%E9%85%8D%E7%BD%AE%0A!%5B08ec068bd24fbc09a0cda14c40260fe0.png%5D(en-resource%3A%2F%2Fdatabase%2F4237%3A1)%0A%60%60%60%0A%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22UTF-8%22%3F%3E%0A%3CContext%3E%0A%3C!--%20%0A%3CResource%20name%3D%22jdbc%2Feesy_mybatis%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E6%95%B0%E6%8D%AE%E6%BA%90%E7%9A%84%E5%90%8D%E7%A7%B0type%3D%22javax.sql.DataSource%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E6%95%B0%E6%8D%AE%E6%BA%90%E7%B1%BB%E5%9E%8Bauth%3D%22Container%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E6%95%B0%E6%8D%AE%E6%BA%90%E6%8F%90%E4%BE%9B%E8%80%85maxActive%3D%2220%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E6%9C%80%E5%A4%A7%E6%B4%BB%E5%8A%A8%E6%95%B0maxWait%3D%2210000%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E6%9C%80%E5%A4%A7%E7%AD%89%E5%BE%85%E6%97%B6%E9%97%B4maxIdle%3D%225%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E6%9C%80%E5%A4%A7%E7%A9%BA%E9%97%B2%E6%95%B0username%3D%22root%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E7%94%A8%E6%88%B7%E5%90%8Dpassword%3D%221234%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E5%AF%86%E7%A0%81driverClassName%3D%22com.mysql.jdbc.Driver%22%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%C2%A0%E9%A9%B1%E5%8A%A8%E7%B1%BBurl%3D%22jdbc%3Amysql%3A%2F%2Flocalhost%3A3306%2Feesy_mybatis%22%C2%A0%C2%A0%E8%BF%9E%E6%8E%A5url%E5%AD%97%E7%AC%A6%E4%B8%B2%2F%3E%0A--%3E%0A%3CResource%20name%3D%22jdbc%2Fdb1%22%0Atype%3D%22javax.sql.DataSource%22%0Aauth%3D%22Container%22%0AmaxActive%3D%2220%22%0AmaxWait%3D%2210000%22%0AmaxIdle%3D%225%22%0Ausername%3D%22root%22%0Apassword%3D%221234%22%0AdriverClassName%3D%22com.mysql.jdbc.Driver%22%0Aurl%3D%22jdbc%3Amysql%3A%2F%2Flocalhost%3A3306%2Fdb1%22%0A%2F%3E%0A%3C%2FContext%3E%0A%60%60%60%0A%23%23%23%23%23%23%201.6%E4%BF%AE%E6%94%B9SqlMapConfig.xml%E9%85%8D%E7%BD%AE%0A!%5B82fab7ad7d40e93aa66c0aad2ada4754.png%5D(en-resource%3A%2F%2Fdatabase%2F4239%3A1)%0A%23%23%23%23%23%23%201.7%E4%BD%BF%E7%94%A8JNDI%E8%BF%9E%E6%8E%A5%E6%95%B0%E6%8D%AE%E5%BA%93%0A!%5Bb4e943c35c8c207d6f84ba7006d01068.png%5D(en-resource%3A%2F%2Fdatabase%2F4241%3A1)%0A**%E6%B3%A8%E6%84%8F%EF%BC%9A**%0A%E8%BF%9E%E6%8E%A5%E6%95%B0%E6%8D%AE%E5%BA%93%E7%9A%84%E9%83%A8%E5%88%86%E5%BE%97%E5%86%99%E5%9C%A8jsp%E4%B8%AD%EF%BC%8C%E6%AD%A4%E5%A4%84test%E4%B8%AD%E4%BB%A3%E7%A0%81%E6%98%AF%E6%97%A0%E6%95%88%E7%9A%84%EF%BC%8C%E5%9B%A0%E4%B8%BAtest%E8%BF%90%E8%A1%8C%E6%9C%AA%E7%BB%8F%E8%BF%87tomcat%0A</center></span>
+</div></body></html> 
