@@ -150,7 +150,7 @@
 
 **示例**
 
-<img src="Java设计模式及UML类图.assets/image-20200627152347918.png" alt="image-20200627152347918" style="zoom: 67%;" />
+<img src="https://gitee.com/fangjie1229/node_pictures/raw/master/img/image-20200627152347918.png" alt="image-20200627152347918" style="zoom: 67%;" />
 
 <img src="Java设计模式及UML类图.assets/image-20200627152432899.png" alt="image-20200627152432899" style="zoom:67%;" />
 

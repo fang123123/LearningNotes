@@ -4,6 +4,16 @@
 
 
 
+
+
+# Docker介绍
+
+<img src="Docker常用命令及操作.assets/image-20200719132519275.png" alt="image-20200719132519275" style="zoom: 50%;" />
+
+
+
+<img src="Docker常用命令及操作.assets/image-20200719132559480.png" alt="image-20200719132559480" style="zoom: 50%;" />
+
 # Docker安装
 
 [Docker使用参考网址](https://docs.docker.com/engine/install/centos/)
