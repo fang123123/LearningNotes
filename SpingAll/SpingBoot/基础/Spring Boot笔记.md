@@ -1,4 +1,4 @@
-# 目录
+目录
 
 [TOC]
 
@@ -1163,7 +1163,7 @@ public class HelloWorld {
 
 图示；
 
-![images/concrete-bindings.png](images/concrete-bindings.png)
+![concrete-bindings](Spring Boot笔记.assets/concrete-bindings.png)
 
 每一个日志的实现框架都有自己的配置文件。使用slf4j以后，**配置文件还是做成日志实现框架自己本身的配置文件；**
 

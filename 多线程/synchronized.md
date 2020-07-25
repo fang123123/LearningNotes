@@ -972,11 +972,9 @@ inflate方法：膨胀为重量级锁
 
 
 
-## JDK8 markword实现表：
-
 <img src="synchronized.assets/线程状态迁移图.png" alt="image-20200419213508934" style="zoom: 50%;" />
 
-![](C:\work\courses\公开课\面试题\你以为你真的懂Synchronized\markword-64.png)
+
 
 **自旋锁什么时候升级为重量级锁？**
 
@@ -1223,7 +1221,7 @@ public class T01_ThreadVisibility {
 
 2、使用自定义值进行赋值
 
-3、返回对象
+3、返回对象2222
 
 如果发生指令重排，导致3执行在2之间，条件判断语句会判断当前对象已经创建，但此时创建的对象并没有初始化，造成错误
 

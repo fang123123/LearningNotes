@@ -1231,6 +1231,18 @@ watch使用是一次性的。一但执行 EXEC 开启事务的执行后，无论
 
 <img src="Redis.assets/7368936-365044ea1c884c96.png" alt="img" style="zoom: 50%;" />
 
+
+
+Redis写操作具体
+
+- 客户端向服务端发送写操作（数据在客户端的内存中）。
+- 数据库服务端接收到写请求的数据（数据在服务端的内存中）。
+- 服务端调用write这个系统调用，将数据往磁盘上写（数据在系统内存的缓冲区中）。
+- 操作系统将缓冲区中的数据转移到磁盘控制器上（数据在磁盘缓存中）。
+- 磁盘控制器将数据写到磁盘的物理介质中（数据真正落到磁盘上）。
+
+
+
 **全量复制开销**
 
 - 主节点需要bgsave
@@ -1434,6 +1446,24 @@ sentinel模式基本可以满足一般生产的需求，具备高可用性。但
 
 新建一个sentinel.conf文件(名字固定)，然后写入配置
 
+参数说明
+
+- sentinel monitor [master-group-name] [ip] [port] [quorum
+  - 主服务器ip和端口，投票数
+- down-after-milliseconds
+  - sentinel 会向 master 发送心跳 PING 来确认 master 是否存活，如果 master 在“一定时间范围”内不回应PONG 或者是回复了一个错误消息，那么这个 sentinel 会主观地认为这个 master 已经不可用了。而这个down-after-milliseconds 就是用来指定这个“一定时间范围”的，单位是毫秒。
+- failover-timeout
+  -  sentinel 对 redis 节点进行自动故障转移的超时设置，当 failover（故障转移）开始后，在此时间内仍然没有触发任何 failover 操作，当前sentinel  将会认为此次故障转移失败。
+- parallel-syncs
+  - 指定了在执行故障转移时， 最多可以有多少个slave同时对新的master进行异步复制（并发数量）
+  - 因为在 salve 执行 salveof 与新 master 同步时，将会终止客户端请求，因此这个值需要权衡。此值较大，意味着“集群”终止客户端请求的时间总和和较大，此值较小,意味着“集群”在故障转移期间，多个 salve 向客户端提供服务时仍然使用旧数据
+
+
+
+- 主观下线（Subjectively Down， 简称 SDOWN）指的是单个 Sentinel 实例对服务器做出的下线判断。
+
+- 客观下线（Objectively Down， 简称 ODOWN）指的是多个 Sentinel 实例在对同一个服务器做出 SDOWN 判断， 并且通过 SENTINEL is-master-down-by-addr 命令互相交流之后， 得出的服务器下线判断。 （一个 Sentinel 可以通过向另一个 Sentinel 发送 SENTINEL is-master-down-by-addr 命令来询问对方是否认为给定的服务器已下线）
+
 ```
 # 最小配置
 
@@ -1499,6 +1529,40 @@ sentinel monitor mymaster 127.0.0.1 6379 1
 ![image-20200717121401242](Redis.assets/image-20200717121401242.png)
 
 
+
+### Redis集群
+
+Redis-Cluster集群
+
+redis的哨兵模式基本已经可以实现高可用，读写分离 ，但是在这种模式下每台redis服务器都存储相同的数据，很浪费内存，所以在redis3.0上加入了cluster模式，实现的redis的分布式存储，也就是说每台redis节点上存储不同的内容。
+
+ Redis-Cluster采用无中心结构,它的特点如下：
+
+- 所有的redis节点彼此互联(PING-PONG机制),内部使用二进制协议优化传输速度和带宽。
+- 节点的fail是通过集群中超过半数的节点检测失效时才生效。
+- 客户端与redis节点直连,不需要中间代理层.客户端不需要连接集群所有节点,连接集群中任何一个可用节点即可。
+
+**工作方式：**
+
+在redis的每一个节点上，都有这么两个东西，一个是插槽（slot），它的的取值范围是：0-16383。还有一个就是cluster，可以理解为是一个集群管理的插件。当我们的存取的key到达的时候，redis会根据crc16的算法得出一个结果，然后把结果对 16384 求余数，这样每个 key 都会对应一个编号在 0-16383 之间的哈希槽，通过这个值，去找到对应的插槽所对应的节点，然后直接自动跳转到这个对应的节点上进行存取操作。
+
+为了保证高可用，redis-cluster集群引入了主从模式，一个主节点对应一个或者多个从节点，当主节点宕机的时候，就会启用从节点。当其它主节点ping一个主节点A时，如果半数以上的主节点与A通信超时，那么认为主节点A宕机了。如果主节点A和它的从节点A1都宕机了，那么该集群就无法再提供服务了。
+
+
+
+
+
+## IO模型
+
+**传统IO**
+
+当使用 read 或者 write 对某一个文件描述符（File Descriptor 以下简称 FD)进行读写时，如果当前 FD 不可读或不可写，整个 Redis 服务就不会对其它的操作作出响应，导致整个服务不可用。
+
+<img src="Redis.assets/java10-1557020023.jpg" alt="为什么Redis 单线程却能支撑高并发？" style="zoom: 67%;" />
+
+
+
+**I/O 多路复用**
 
 
 
