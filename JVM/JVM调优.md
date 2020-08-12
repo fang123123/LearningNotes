@@ -296,8 +296,8 @@ JVM支持两种类型的加载器：引导类加载器（BootStrap class Loader�
 #### 加载过程
 
 1. 通过一个类的全限定名获取此类的二进制字节流
-2. 将这个字节流所代表的静态存储结构转化为方法区的运行时数据结构
-3. ==在内存中生成一个代表这个类的java.lang.Class对象==，作为方法区这个类的各种数据的访问入口
+2. 将这个字节流所代表的静态存储结构转化为**方法区**的运行时数据结构
+3. ==在**内存**中生成一个代表这个类的java.lang.Class对象==，作为方法区这个类的各种数据的访问入口
 
 #### 加载.class文件的方式
 
@@ -318,7 +318,7 @@ JVM支持两种类型的加载器：引导类加载器（BootStrap class Loader�
 
 1. **校验** – 字节码校验器会校验生成的Class文件字节码是否正确，如果校验失败，我们会得到**校验错误**。
 
-2. **准备** – 分配内存并初始化**默认值**给所有的静态变量。
+2. **准备** – 分配内存（方法区）并初始化**默认值**给所有的静态变量。
 
 3. **解析** – 所有**符号内存引用**被**方法区(Method Area)**的**原始引用**所替代。
 
@@ -361,6 +361,14 @@ public class ClassInitTest{
 - 当初始化一个类的时候，如果发现其父类还没有进行过初始化，则先执行父类的<clinit>（）
 - 虚拟机会保证一个类的<clinit>（）方法在多线程环境中被同步加锁，所以标明static代码块，其实已经是同步加锁了
 - 当范围一个Java类的静态域时，只有真正声名这个域的类才会被初始化
+
+
+
+### 类加载的过程
+
+
+
+
 
 
 
@@ -1722,6 +1730,16 @@ public static Object getProxyInstance(Object object) {
 
 
 
+### 方法区回收
+
+在类使用完之后，如果满足下面的情况，类就会被卸载：
+
+- 该类所有的实例都已经被回收，也就是java堆中不存在该类的任何实例。
+- 加载该类的ClassLoader已经被回收。
+- 该类对应的java.lang.Class对象没有任何地方被引用，无法在任何地方通过反射访问该类的方法。
+
+
+
 ### 使用Memory Analyzer分析
 
 1. 可以使用Eclipse开发的一款分析内存的软件Memory Analyzer分析堆内存快照[软件链接](https://www.eclipse.org/mat/downloads.php)
@@ -1787,12 +1805,60 @@ public class rootSearch {
 
 1. 强引用，指向某一对象的所有强引用都断开，该对象才能被回收。
 
+   ```
+   Object object = new Object();  
+   Object[] objArr = new Object[1000];  
+   ```
+
 2. 软、弱引用，指向某一被软、弱引用的对象的所有强引用都断开，该对象可能被回收。
 
    - 软引用：如果垃圾回收之后，**内存依然不足**，只被软引用的对象会被回收。
+
+     ```
+     MyObject aRef = new  MyObject();  
+     SoftReference aSoftRef=new SoftReference(aRef);
+     aRef = null;
+     //建议写成下面在这种
+     SoftReference aSoftRef=new SoftReference(new  MyObject());
+     //MyObject成为了软引用对象，但是软引用对象本身还是一个强引用
+     MyObject anotherRef=(MyObject)aSoftRef.get();//如果软引用被回收，此时返回null
+     
+     //可以使用下面的方法
+     ReferenceQueue queue = new  ReferenceQueue();
+     //当这个SoftReference所软引用的aMyOhject被垃圾收集器回收的同时，ref所强引用的SoftReference对象被列入ReferenceQueue
+     SoftReference  ref=new  SoftReference(aMyObject, queue);
+     //
+     SoftReference ref = null;  
+     while ((ref = (EmployeeRef) q.poll()) != null) {  
+         // 遍历所有的软引用对象SoftReference，检查哪个SoftReference所软引用的对象已经被回收，然后清除这些软引用SoftReference
+         if((MyObject)ref.get()==null){
+         	ref = null;
+         }else{
+         	//软引用没有消失的重新加入到队列中
+         	q.offer(ref);
+         }
+     }  
+     ```
+
    - 弱引用：只要发生垃圾回收，只被弱引用的对象就会被回收。
+
+     ```
+     WeakReference<People>reference=new WeakReference<People>(new People("zhouqian",20));
+     
+     //WeakHashMap，在这种Map中存放了键对象的弱引用，当一个键对象被垃圾回收器回收时，那么相应的值对象的引用会从Map中删除
+     WeakHashMap<Key,Value> map=new WeakHashMap<Key,Value>();
+     //使用WeakHashMap保存Socket连接
+     Map<Socket,User> m = new WeakHashMap<Socket,User>();
+     ```
+
+     
+
+     
+
    - 当A2、A3对象回收后，会将软弱引用本身转移到引用队列中，因为此时GC Root此时依然关联着软弱引用，但是软弱引用已经没有用了。
+
    - 遍历引用队列，释放引用。
+
    - 主要用途：用于解决OOM问题(OutOfMemory)，假如有一个应用需要读取大量的本地图片，如果每次读取图片都从硬盘读取，则会严重影响性能，但是如果全部加载到内存当中，又有可能造成内存溢出，此时使用软引用可以解决这个问题
 
    | 引用类型 | 被回收时间 |      用途      |   生存时间    |
@@ -1804,12 +1870,17 @@ public class rootSearch {
 3. 虚引用
 
    - 当ByteBuffer对象的强引用消失后，ByteBuffer对象会被垃圾回收，此时直接内存依然存在
-   - 虚引用进入引用队列中，RefferenceHandler在队列中寻找到虚引用Cleaner
+   - 虚引用进入引用队列中，ReferenceHandler在ReferenceQueue队列中寻找到虚引用Cleaner
    - 调用Unsafe.freeMemory()方法释放直接内存；
    - 释放引用。
    - 这里的ByteBuffer和Cleaner只是举例
 
    ```java
+   ReferenceQueue<String> queue = new ReferenceQueue<String>();
+   //虚引用必须和引用队列关联。如果程序发现某个虚引用已经被加入到引用队列，那么就可以在所引用的对象的内存被回收之前采取必要的行动。
+   PhantomReference<String> pr = new PhantomReference<String>(new String("hello"), queue);
+   
+   
    //Cleaner是一个虚引用，JVM存在一个Reference Handler线程专门监控虚引用对象
    //一旦对象被回收（this表示当前对象），就会触发任务对象方法，从而释放直接内存
    cleaner = Cleaner.create(this, new Deallocate(base, size, cap));

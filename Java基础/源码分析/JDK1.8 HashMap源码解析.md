@@ -567,6 +567,8 @@ Node<K,V> newNode(int hash, K key, V value, Node<K,V> e) {
 }
 ```
 
+
+
 ## Entry的继承关系
 
 <img src="JDK1.8 HashMap源码解析.assets/1256203-20171105115353170-1563498238.png" alt="LinkedHashMapEntry" style="zoom: 50%;" />
@@ -682,6 +684,8 @@ grow
 - 当add第1个元素时，oldCapacity 为0，经比较后第一个if判断成立，newCapacity = minCapacity(为10)。但是第二个if判断不会成立，即newCapacity 不比 MAX_ARRAY_SIZE大，则不会进入 `hugeCapacity` 方法。数组容量为10，add方法中 return true,size增为1。
 - 当add第11个元素进入grow方法时，newCapacity为15，比minCapacity（为11）大，第一个if判断不成立。新容量没有大于数组最大size，不会进入hugeCapacity方法。数组容量扩为15，add方法中return true,size增为11。
 - 以此类推······
+
+图里面画错了，新容量=旧容量*1.5
 
 <img src="JDK1.8 HashMap源码解析.assets/ArrayList-insert (1).png" alt="ArrayList-insert (1)" style="zoom:33%;" />
 
@@ -821,6 +825,8 @@ public void ensureCapacity(int minCapacity) {
 
 # ConcurrentHashMap
 
-Java7 中 ConcruuentHashMap 使用的分段锁，也就是每一个 Segment 上同时只有一个线程可以操作，每一个 Segment 都是一个类似 HashMap 数组的结构，它可以扩容，它的冲突会转化为链表。但是 Segment 的个数一但初始化就不能改变。
+Java7 中 ConcurruentHashMap 使用的分段锁，也就是每一个 Segment 上同时只有一个线程可以操作，每一个 Segment 都是一个类似 HashMap 数组的结构，它可以扩容，它的冲突会转化为链表。但是 Segment 的个数一但初始化就不能改变，默认为16个。不是懒加载。使用reentrantlock
 
-Java8 中的 ConcruuentHashMap 使用的 Synchronized 锁加 CAS 的机制。结构也由 Java7 中的 **Segment 数组 + HashEntry 数组 + 链表** 进化成了 **Node 数组 + 链表 / 红黑树**，Node 是类似于一个 HashEntry 的结构。它的冲突再达到一定大小时会转化成红黑树，在冲突小于一定数量时又退回链表。
+![image-20200802160933508](JDK1.8 HashMap源码解析.assets/image-20200802160933508.png)
+
+Java8 中的 ConcruuentHashMap 使用的 Synchronized 锁（插入链表的时候）加 CAS （添加链表的第一个元素时）的机制。结构也由 Java7 中的 **Segment 数组（） + HashEntry 数组 + 链表** 进化成了 **Node 数组 + 链表 / 红黑树**，Node 是类似于一个 HashEntry 的结构。它的冲突再达到一定大小时会转化成红黑树，在冲突小于一定数量时又退回链表。
