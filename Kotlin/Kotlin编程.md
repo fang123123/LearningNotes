@@ -773,6 +773,9 @@ val p = Person()
 Kotlin中主构造函数是没有函数体的，直接定义在类名的后面，如果不显示声明，默认主构造函数为无参构造函数
 
 ```kotlin
+class Person constructor(firstName: String) { /*……*/ }
+
+//如果主构造函数没有任何注解或者可见性修饰符，可以省略这个 constructor 关键字。
 //默认声明无参构造函数
 class Person{
 	var name = ""
