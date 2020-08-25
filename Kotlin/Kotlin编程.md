@@ -378,8 +378,8 @@ fun SharedPreferences.open(block:SharedPreferences.Editor.() -> Unit){
 }
 
 getSharedPreferences("data",Context.MODE_PRIVATE).open(){
-    editor.putString("name","Tom")
-	editor.putString("age",28)
+    putString("name","Tom")
+    putString("age",28)
 }
 ```
 
@@ -389,8 +389,8 @@ Google提供的KTX扩展库已经包含了该用法，Android项目只需导入�
 implementation 'androidx.core:core-ktx:1.0.2'
 //使用
 getSharedPreferences("data",Context.MODE_PRIVATE).edit(){
-    editor.putString("name","Tom")
-	editor.putString("age",28)
+    putString("name","Tom")
+    putString("age",28)
 }
 ```
 
