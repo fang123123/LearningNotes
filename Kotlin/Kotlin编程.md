@@ -442,6 +442,7 @@ db.insert("Student",null,values)
 
 
 ### 内联函数
+[参考网址](https://juejin.im/post/6844904099884826632)
 
 消除lambda表达式使用时**创建匿名类的开销**
 
@@ -465,6 +466,11 @@ fun main(){
 将lambda表达式中函数体替换operation方法，得到一个完整的方法，然后将方法体中的内容替换到main函数中。
 
 所以内联函数实际上就是**将代码动态添加到调用处运行**
+实际上就是一种以时间换空间的思想
+好处：减少了创建对象带来的开销
+坏处：增加时间开销
+使用场景：
+经常需要使用的函数，可以使用内联函数
 
 ```mermaid
 graph RL
@@ -485,9 +491,7 @@ inline fun numOp(num1:Int,num2:Int):Int{
 }
 
 fun main(){
-    val result = numOp(num1,num2){n1,n2 ->
-        n1+n2
-    }
+    val result = numOp(num1,num2)
 }
 
 //第二步
@@ -496,15 +500,83 @@ fun main(){
     val result = num1+num2
 }
 ```
+没有使用内联inline
+反编译生成的代码，可以看到lambda表达式就是java中提供的Function函数，注意是**非空的**
+```kotlin
+public final class Unit13Kt {
+    public static final void runSomething(@NotNull String param, @NotNull Function0<Unit> run) {
+        Intrinsics.checkParameterIsNotNull(param, "param");
+        Intrinsics.checkParameterIsNotNull(run, "run");
+        System.out.println("param:" + param);
+        run.invoke();
+    }
+
+    public static final void main(@NotNull String[] args) {
+        Intrinsics.checkParameterIsNotNull(args, "args");
+        //第二个参数是main.1.INSTANCE对象
+        runSomething("param1", main.1.INSTANCE);
+    }
+}
+
+//kotlin自动生成的一个类
+final class Unit13Kt$main$1 extends Lambda implements Function0<Unit> {
+    //这里是runSomething方法用到的第二个参数
+    public static final Unit13Kt$main$1 INSTANCE = new Unit13Kt$main$1();
+
+    Unit13Kt$main$1() {
+        super(0);
+    }
+
+    public final void invoke() {
+        System.out.println("我是高阶函数的第二个参数");
+    }
+}
+
+```
+使用内联inline
+```kotlin
+public final class Unit13Kt {
+    public static final void runSomething(@NotNull String param, @NotNull Function0<Unit> run) {
+        Intrinsics.checkParameterIsNotNull(param, "param");
+        Intrinsics.checkParameterIsNotNull(run, "run");
+        System.out.println("param:" + param);
+        run.invoke();
+    }
+	// 函数调用已经消失
+    public static final void main(@NotNull String[] args) {
+        Intrinsics.checkParameterIsNotNull(args, "args");
+        System.out.println("param:" + "param1");
+        System.out.println("我是高阶函数的第二个参数");
+    }
+}
+
+```
 
 #### 排除内联功能
 
 使用inline关键字后，Kotlin编译器会自动将所有引用的Lambda表达式全部进行内联。==noinline关键字==排除内联功能
+使用原因：如果定义成noinline，说明该表达式需要生成对应的instance变量的处理。
+场景：对于lambda表达式可空类型，如果不做排除内联声明，只会得到函数内部的执行逻辑，没有这个函数对象
 
+使用noinline排除内联
 ```kotlin
-inline fun inlineTest(block1:() -> Unit,noinline block2:() -> Unit){
-    ...
+public static final void testNoInline(@NotNull Function0<Unit> run, @Nullable Function0<String> result) {
+    Intrinsics.checkParameterIsNotNull(run, "run");
+    run.invoke();
+    if (result != null) {
+        String str = (String) result.invoke();
+    }
 }
+
+public static final void main(@NotNull String[] args) {
+    Intrinsics.checkParameterIsNotNull(args, "args");
+    Function0 result$iv = main.2.INSTANCE;
+    System.out.println("run的lambda表达式");
+    if (result$iv != null) {
+        String str = (String) result$iv.invoke();
+    }
+}
+
 ```
 
 **内联函数与非内联函数的区别**
